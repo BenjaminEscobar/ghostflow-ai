@@ -5,58 +5,178 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; base-uri 'none'; form-action 'none'">
   <meta name="referrer" content="no-referrer">
+  <meta name="color-scheme" content="light">
   <title>GhostFlow Demo Console</title>
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 3c-6 0-10 4.5-10 10.5V28l3.3-2.5L12.7 28 16 25.5 19.3 28l3.4-2.5L26 28V13.5C26 7.5 22 3 16 3z' fill='%238b7cff'/%3E%3Ccircle cx='12.5' cy='13.5' r='2' fill='%230b0f1a'/%3E%3Ccircle cx='19.5' cy='13.5' r='2' fill='%230b0f1a'/%3E%3C/svg%3E">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%231877F2'/%3E%3Cpath d='M16 6.5c-4.6 0-7.6 3.4-7.6 8v9.4c0 .7.8 1.1 1.4.7l1.6-1.2 1.8 1.4c.4.3 1 .3 1.4 0L16 23.4l1.4 1.4c.4.3 1 .3 1.4 0l1.8-1.4 1.6 1.2c.6.4 1.4 0 1.4-.7v-9.4c0-4.6-3-8-7.6-8z' fill='%23fff'/%3E%3Cellipse cx='13.4' cy='15' rx='1.4' ry='1.8' fill='%231877F2'/%3E%3Cellipse cx='18.6' cy='15' rx='1.4' ry='1.8' fill='%231877F2'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="console.css">
   <script src="console.js" defer></script>
 </head>
 <body>
+  <a class="skip" href="#app">Skip to content</a>
   <header class="topbar">
     <div class="brand">
-      <svg class="logo" viewBox="0 0 32 32" aria-hidden="true"><path d="M16 3c-6 0-10 4.5-10 10.5V28l3.3-2.5L12.7 28 16 25.5 19.3 28l3.4-2.5L26 28V13.5C26 7.5 22 3 16 3z"/><circle cx="12.5" cy="13.5" r="2"/><circle cx="19.5" cy="13.5" r="2"/></svg>
+      <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true" focusable="false">
+        <rect class="bm-bg" width="32" height="32" rx="9"/>
+        <path class="bm-body" d="M16 6.5c-4.6 0-7.6 3.4-7.6 8v9.4c0 .7.8 1.1 1.4.7l1.6-1.2 1.8 1.4c.4.3 1 .3 1.4 0L16 23.4l1.4 1.4c.4.3 1 .3 1.4 0l1.8-1.4 1.6 1.2c.6.4 1.4 0 1.4-.7v-9.4c0-4.6-3-8-7.6-8z"/>
+        <ellipse class="bm-eye" cx="13.4" cy="15" rx="1.4" ry="1.8"/><ellipse class="bm-eye" cx="18.6" cy="15" rx="1.4" ry="1.8"/>
+      </svg>
       <div>
         <div class="brand-name">GhostFlow <span>AI</span></div>
-        <div class="brand-sub">Demo Console</div>
+        <div class="brand-sub">Automate · Understand · Heal</div>
       </div>
     </div>
-    <div class="source">
-      <label for="source-select">Evidence</label>
-      <select id="source-select" aria-describedby="source-hint"></select>
-      <label class="follow"><input type="checkbox" id="follow" checked> Follow live runs</label>
+    <div class="segmented" role="tablist" aria-label="View">
+      <button type="button" role="tab" id="tab-demo" aria-controls="demo-view" aria-selected="true"><span class="ico" aria-hidden="true">▶</span>Demo</button>
+      <button type="button" role="tab" id="tab-dev" aria-controls="dev-view" aria-selected="false" tabindex="-1"><span class="ico" aria-hidden="true">&lt;/&gt;</span>Developer</button>
     </div>
-    <div class="badges" id="badges" aria-live="polite"></div>
+    <div class="system" id="system-status" role="status" aria-live="polite"></div>
   </header>
 
-  <div id="replay-banner" class="replay-banner" hidden></div>
+  <div id="replay-banner" class="replay-banner" role="status" hidden></div>
 
-  <main id="app">
-    <section class="hero" id="hero" aria-label="Automation overview"></section>
-    <nav class="scenarios" id="scenarios" aria-label="Scenarios"></nav>
-    <div class="grid">
-      <section class="panel" id="timeline-panel" aria-labelledby="timeline-title">
-        <div class="panel-head">
-          <h2 id="timeline-title">Execution</h2>
-          <button type="button" id="replay" class="ghost-btn" hidden>▶ Replay evidence</button>
-        </div>
-        <ol class="timeline" id="timeline"></ol>
+  <div class="shell">
+    <aside class="sidebar" aria-label="Evidence and scenarios">
+      <section class="side-block evidence-block" aria-labelledby="evidence-src-title">
+        <h2 class="side-title" id="evidence-src-title">Evidence</h2>
+        <label class="sr-only" for="source-select">Evidence source</label>
+        <select id="source-select"></select>
+        <label class="switch"><input type="checkbox" id="follow" checked><span>Follow live runs</span></label>
+        <div class="badges" id="badges" aria-live="polite"></div>
+        <a id="raw-link" class="btn ghost small" target="_blank" rel="noopener noreferrer" hidden>Raw JSON</a>
       </section>
-      <section class="panel healing" id="healing-panel" aria-labelledby="healing-title">
-        <div class="panel-head"><h2 id="healing-title">Self-Healing</h2><span id="healing-outcome"></span></div>
-        <div id="healing"></div>
+      <section class="side-block scenario-block" aria-labelledby="scenarios-title">
+        <h2 class="side-title" id="scenarios-title">Scenarios</h2>
+        <nav class="scenarios" id="scenarios" role="tablist" aria-labelledby="scenarios-title" aria-orientation="vertical"></nav>
       </section>
-      <div class="stack">
-        <section class="panel" id="intel-panel" aria-labelledby="intel-title">
-          <div class="panel-head"><h2 id="intel-title">Meta Intelligence</h2><span id="intel-badge"></span></div>
-          <div id="intel"></div>
-        </section>
-        <section class="panel" id="evidence-panel" aria-labelledby="evidence-title">
-          <div class="panel-head"><h2 id="evidence-title">Verifiable evidence</h2></div>
-          <div id="evidence"></div>
-        </section>
+      <div class="side-foot">
+        <svg class="brand-mark small" viewBox="0 0 32 32" aria-hidden="true" focusable="false">
+          <rect class="bm-bg soft" width="32" height="32" rx="9"/>
+          <path class="bm-body tint" d="M16 6.5c-4.6 0-7.6 3.4-7.6 8v9.4c0 .7.8 1.1 1.4.7l1.6-1.2 1.8 1.4c.4.3 1 .3 1.4 0L16 23.4l1.4 1.4c.4.3 1 .3 1.4 0l1.8-1.4 1.6 1.2c.6.4 1.4 0 1.4-.7v-9.4c0-4.6-3-8-7.6-8z"/>
+        </svg>
+        <div><strong>GhostFlow AI</strong><span>Automation that adapts</span></div>
       </div>
-    </div>
-  </main>
-  <p class="empty-state" id="empty" hidden></p>
+    </aside>
+
+    <main id="app" tabindex="-1">
+      <section id="demo-view" role="tabpanel" aria-labelledby="tab-demo">
+        <div class="hero-row">
+          <section class="hero" aria-labelledby="hero-title">
+            <div class="hero-text">
+              <p class="eyebrow" id="wf-name"></p>
+              <h1 id="hero-title">Automation that <span class="hl">adapts</span></h1>
+              <p class="tagline">GhostFlow learns a workflow once, understands it, and recovers when the interface changes.</p>
+              <ul class="capabilities" id="capabilities" aria-label="Capabilities"></ul>
+            </div>
+            <div class="hero-art">
+              <svg class="mascot" id="mascot" viewBox="0 0 160 160" role="img" aria-labelledby="mascot-title" data-mood="idle">
+                <title id="mascot-title">GhostFlow mascot</title>
+                <defs>
+                  <linearGradient id="gf-body" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0" stop-color="#ffffff"/><stop offset=".6" stop-color="#eef2ff"/><stop offset="1" stop-color="#d9d2ff"/>
+                  </linearGradient>
+                  <linearGradient id="gf-ring" x1="0" y1="0" x2="1" y2="0">
+                    <stop offset="0" stop-color="#1877F2"/><stop offset="1" stop-color="#8f6bff"/>
+                  </linearGradient>
+                  <radialGradient id="gf-glow" cx="0.5" cy="0.5" r="0.5">
+                    <stop offset="0" stop-color="#8f6bff" stop-opacity=".32"/><stop offset=".55" stop-color="#5ea8ff" stop-opacity=".16"/><stop offset="1" stop-color="#5ea8ff" stop-opacity="0"/>
+                  </radialGradient>
+                </defs>
+                <circle class="aura" cx="80" cy="78" r="78" fill="url(#gf-glow)"/>
+                <ellipse class="shadow" cx="80" cy="146" rx="34" ry="5"/>
+                <ellipse class="ring back" cx="80" cy="112" rx="62" ry="14" fill="none" stroke="url(#gf-ring)" stroke-width="2.5" stroke-opacity=".45"/>
+                <g class="float">
+                  <circle class="glow" cx="80" cy="74" r="56" fill="url(#gf-glow)"/>
+                  <path class="tuft" d="M66 31c-2-7 1-12 6-13-1 5 1 9 4 11zM94 31c2-7-1-12-6-13 1 5-1 9-4 11z" fill="#e3e4ff"/>
+                  <path class="body" fill="url(#gf-body)" stroke="#cdd6f6" stroke-width="1.5" d="M80 26c-26 0-42 19.5-42 45v51c0 3.6 4.2 5.6 7 3.3l8-6.4 9.4 7.3c2.2 1.7 5.2 1.7 7.4 0L80 119l10.2 7.2c2.2 1.7 5.2 1.7 7.4 0l9.4-7.3 8 6.4c2.8 2.3 7 .3 7-3.3V71c0-25.5-16-45-42-45z"/>
+                  <path class="shine" d="M53 52c3.5-9 11-15 20-16.5" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round"/>
+                  <g class="eyes-open"><ellipse cx="66" cy="72" rx="7" ry="9" fill="#1d2a5c"/><ellipse cx="94" cy="72" rx="7" ry="9" fill="#1d2a5c"/><circle cx="68.5" cy="68" r="2.6" fill="#fff"/><circle cx="96.5" cy="68" r="2.6" fill="#fff"/></g>
+                  <g class="eyes-happy" fill="none" stroke="#1d2a5c" stroke-width="4" stroke-linecap="round"><path d="M59 74c3-6 11-6 14 0"/><path d="M87 74c3-6 11-6 14 0"/></g>
+                  <g class="blush" fill="#f4b6dc" opacity=".85"><ellipse cx="55" cy="86" rx="6" ry="3.5"/><ellipse cx="105" cy="86" rx="6" ry="3.5"/></g>
+                  <path class="mouth-smile" d="M73 88c4 4.5 10 4.5 14 0" fill="none" stroke="#1d2a5c" stroke-width="3.2" stroke-linecap="round"/>
+                  <ellipse class="mouth-o" cx="80" cy="90" rx="4" ry="4.6" fill="#1d2a5c"/>
+                  <path class="mouth-worried" d="M73 92c4-4.5 10-4.5 14 0" fill="none" stroke="#1d2a5c" stroke-width="3.2" stroke-linecap="round"/>
+                </g>
+                <path class="ring front" d="M18 112c0 7.7 27.8 14 62 14s62-6.3 62-14" fill="none" stroke="url(#gf-ring)" stroke-width="3" stroke-linecap="round"/>
+                <g class="sparkles" fill="#7b5cff">
+                  <path d="M134 30l3 7.5 7.5 3-7.5 3-3 7.5-3-7.5-7.5-3 7.5-3z"/>
+                  <path d="M24 40l2.2 5.3 5.3 2.2-5.3 2.2-2.2 5.3-2.2-5.3-5.3-2.2 5.3-2.2z"/>
+                  <path d="M140 86l1.8 4.2 4.2 1.8-4.2 1.8-1.8 4.2-1.8-4.2-4.2-1.8 4.2-1.8z"/>
+                </g>
+              </svg>
+              <p class="mascot-say" id="mascot-say" aria-hidden="true"></p>
+            </div>
+          </section>
+          <section class="card how" aria-labelledby="how-title">
+            <h2 id="how-title">How it works</h2>
+            <p>GhostFlow replays a learned workflow. When a recorded element is gone, an AI advisor proposes an equivalent and GhostFlow verifies it before acting.</p>
+            <button type="button" id="replay" class="btn primary wide" hidden>Replay evidence</button>
+            <p class="how-meta" id="how-meta"></p>
+          </section>
+        </div>
+
+        <ol class="card stepper" id="flow" aria-label="Pages of the workflow"></ol>
+
+        <div class="main-grid">
+          <section class="card scenario-card" aria-labelledby="sc-title">
+            <div class="sc-head">
+              <svg class="brand-mark sc-mark" viewBox="0 0 32 32" aria-hidden="true" focusable="false">
+                <rect class="bm-bg" width="32" height="32" rx="9"/>
+                <path class="bm-body" d="M16 6.5c-4.6 0-7.6 3.4-7.6 8v9.4c0 .7.8 1.1 1.4.7l1.6-1.2 1.8 1.4c.4.3 1 .3 1.4 0L16 23.4l1.4 1.4c.4.3 1 .3 1.4 0l1.8-1.4 1.6 1.2c.6.4 1.4 0 1.4-.7v-9.4c0-4.6-3-8-7.6-8z"/>
+                <ellipse class="bm-eye" cx="13.4" cy="15" rx="1.4" ry="1.8"/><ellipse class="bm-eye" cx="18.6" cy="15" rx="1.4" ry="1.8"/>
+              </svg>
+              <div class="sc-text">
+                <h2 id="sc-title"></h2>
+                <p id="sc-sub"></p>
+              </div>
+              <div class="result" id="result-summary" aria-live="polite"></div>
+            </div>
+            <div class="sc-body">
+              <ol class="pages" id="steps" aria-label="Steps by page"></ol>
+              <div class="stage-col">
+                <div class="browser">
+                  <div class="browser-bar" aria-hidden="true"><i></i><i></i><i></i><span class="address" id="address"></span></div>
+                  <div class="browser-body">
+                    <div class="page" id="page"></div>
+                    <div class="action" id="action" aria-live="polite"></div>
+                  </div>
+                </div>
+                <p class="caption" id="stage-caption"></p>
+                <ul class="events" id="events" aria-label="What happened"></ul>
+              </div>
+            </div>
+            <div class="verifs" id="verifs"></div>
+          </section>
+          <section class="card heal" id="heal-summary" aria-labelledby="heal-summary-title"></section>
+        </div>
+
+        <section class="card understand" id="understand" aria-labelledby="understand-title"></section>
+      </section>
+
+      <section id="dev-view" role="tabpanel" aria-labelledby="tab-dev" hidden>
+        <div class="dev-grid">
+          <section class="card" aria-labelledby="timeline-title">
+            <div class="card-head"><h2 id="timeline-title">Execution</h2></div>
+            <ol class="timeline" id="timeline"></ol>
+          </section>
+          <section class="card" aria-labelledby="healing-title">
+            <div class="card-head"><h2 id="healing-title">Self-Healing audit</h2><span id="healing-outcome"></span></div>
+            <div id="healing"></div>
+          </section>
+          <div class="stack">
+            <section class="card" aria-labelledby="intel-title">
+              <div class="card-head"><h2 id="intel-title">Meta Intelligence</h2><span id="intel-badge"></span></div>
+              <div id="intel"></div>
+            </section>
+            <section class="card" aria-labelledby="evidence-title">
+              <div class="card-head"><h2 id="evidence-title">Verifiable evidence</h2></div>
+              <div id="evidence"></div>
+            </section>
+          </div>
+        </div>
+      </section>
+    </main>
+    <p class="empty-state" id="empty" hidden></p>
+  </div>
   <footer class="foot" id="source-hint"></footer>
 </body>
 </html>
