@@ -35,6 +35,18 @@ class Settings(BaseSettings):
     browser_headless: bool = True
     step_timeout_ms: int = 10_000
     max_concurrent_runs: int = 2
+    # Optional pause between steps so a headed replay can be followed or filmed. 0 = off.
+    step_delay_ms: int = Field(default=0, ge=0, le=5_000)
+
+    # Semantic self-healing (GF-003): when every recorded locator of a step finds nothing, ask
+    # the AI provider to pick one of the page's real candidates; deterministic checks decide.
+    healing_enabled: bool = False
+    healing_min_confidence: Literal["high", "medium"] = "high"
+    # Buttons, submits and other controls with possible side effects are never recovered unless
+    # this is set, and even then never after an earlier submit whose outcome is unconfirmed.
+    healing_allow_side_effects: bool = False
+    healing_max_candidates: int = Field(default=40, ge=5, le=100)
+    healing_max_attempts_per_run: int = Field(default=2, ge=1, le=5)
 
     @property
     def allowed_origin_list(self) -> list[str]:

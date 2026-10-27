@@ -5,6 +5,8 @@ Safety properties:
 - Every browser request (documents, XHR, images...) is checked against the workflow's
   origin allowlist, itself a subset of the server allowlist. Others are aborted.
 - Sensitive input values are scrubbed from error messages before they are returned.
+- Self-healing (execution/recovery.py) only runs when every recorded locator found nothing,
+  before the step acted, and can only act on a candidate GhostFlow extracted and validated.
 """
 
 import time
@@ -31,6 +33,15 @@ from ghostflow.dsl.models import (
 )
 from ghostflow.dsl.templating import render
 from ghostflow.execution.base import RunResult, StepResult, VerificationResult, resolve_inputs
+from ghostflow.execution.recovery import (
+    SUBMITS_JS,
+    ElementNotFound,
+    Healer,
+    PlaywrightCandidateSource,
+    RecoveryPolicy,
+    RunState,
+    describe_strategy,
+)
 from ghostflow.security.urls import UrlPolicy
 
 _POLL_INTERVAL_MS = 150
@@ -48,10 +59,20 @@ def _now() -> datetime:
 class PlaywrightWebAdapter:
     kind = "web"
 
-    def __init__(self, policy: UrlPolicy, *, headless: bool = True, step_timeout_ms: int = 10_000):
+    def __init__(
+        self,
+        policy: UrlPolicy,
+        *,
+        headless: bool = True,
+        step_timeout_ms: int = 10_000,
+        step_delay_ms: int = 0,
+        healer: Healer | None = None,
+    ):
         self._policy = policy
         self._headless = headless
         self._timeout = step_timeout_ms
+        self._delay = step_delay_ms
+        self._healer = healer or Healer(RecoveryPolicy(enabled=False), policy)
 
     # -- public -------------------------------------------------------------------------
 
@@ -84,9 +105,12 @@ class PlaywrightWebAdapter:
                     context.route("**/*", guard)
                     page = context.new_page()
                     page.set_default_timeout(self._timeout)
+                    state = RunState()
 
                     for i, step in enumerate(workflow.steps):
-                        result = self._run_step(page, step, values, policy, secrets)
+                        if i and self._delay:
+                            page.wait_for_timeout(self._delay)
+                        result = self._run_step(page, workflow, step, values, policy, secrets, state)
                         steps.append(result)
                         if result.status == "failed":
                             status = "failed"
@@ -121,20 +145,32 @@ class PlaywrightWebAdapter:
 
     # -- steps --------------------------------------------------------------------------
 
-    def _run_step(self, page: Page, step, values: dict[str, str], policy: UrlPolicy, secrets: list[str]) -> StepResult:
+    def _run_step(
+        self, page: Page, workflow: Workflow, step, values: dict[str, str], policy: UrlPolicy, secrets: list[str],
+        state: RunState,
+    ) -> StepResult:  # fmt: skip
         t0 = time.monotonic()
         result = StepResult(step_id=step.id, action=step.action, status="passed")
         try:
             if isinstance(step, NavigateStep):
                 policy.check(step.url)
                 page.goto(step.url, wait_until="domcontentloaded")
+                state.unconfirmed_side_effect = False
             elif isinstance(step, WaitForUrlStep):
                 page.wait_for_url(lambda url: urlsplit(url).path == step.path, wait_until="domcontentloaded")
+                state.unconfirmed_side_effect = False  # the previous action's outcome is now known
             else:
-                locator, index = self._resolve(page, step.target)
+                try:
+                    locator, index = self._resolve(page, step.target)
+                except ElementNotFound as failure:
+                    self._recover(page, workflow, step, values, secrets, failure, state, result)
+                    result.duration_ms = int((time.monotonic() - t0) * 1000)
+                    return result
                 result.strategy_index = index
                 result.strategy_by = step.target.strategies[index].by
+                result.resolution = "primary" if index == 0 else "deterministic_fallback"
                 result.healed = index > 0
+                self._note_side_effect(locator, step, state)
                 if isinstance(step, ClickStep):
                     locator.click()
                 elif isinstance(step, FillStep):
@@ -152,6 +188,29 @@ class PlaywrightWebAdapter:
             result.error = _scrub(str(exc), secrets)
         result.duration_ms = int((time.monotonic() - t0) * 1000)
         return result
+
+    def _recover(self, page, workflow, step, values, secrets, failure: ElementNotFound, state: RunState, result):
+        """One self-healing attempt: the step either acted once on a validated candidate or failed."""
+        value = render(step.value, values) if isinstance(step, (FillStep, SelectStep)) else None
+        source = PlaywrightCandidateSource(page, timeout_ms=self._timeout)
+        attempt = self._healer.attempt(workflow=workflow, step=step, failure=failure, source=source, state=state, value=value)
+        result.recovery = attempt
+        if attempt.outcome == "recovered":
+            result.resolution = "ai_recovery"
+        else:
+            result.status = "failed"
+            result.error = _scrub(f"{failure} — recovery {attempt.outcome}: {attempt.reason}", secrets)
+
+    @staticmethod
+    def _note_side_effect(locator: Locator, step, state: RunState) -> None:
+        is_press = isinstance(step, PressStep)
+        if not (isinstance(step, ClickStep) or (is_press and step.key == "Enter")):
+            return
+        try:
+            if locator.evaluate(SUBMITS_JS, is_press):
+                state.unconfirmed_side_effect = True
+        except PlaywrightError:
+            state.unconfirmed_side_effect = True  # unknown: assume the conservative case
 
     def _locator(self, page: Page, strategy) -> Locator:
         match strategy.by:
@@ -175,6 +234,7 @@ class PlaywrightWebAdapter:
         """First strategy (in priority order) that identifies exactly one element."""
         deadline = time.monotonic() + self._timeout / 1000
         while True:
+            ambiguous = False
             for index, strategy in enumerate(target.strategies):
                 locator = self._locator(page, strategy)
                 try:
@@ -186,8 +246,13 @@ class PlaywrightWebAdapter:
                     continue
                 if count == 1:
                     return locator, index
+                ambiguous = ambiguous or count > 1
             if time.monotonic() >= deadline:
-                raise StepFailure(f"No locator strategy matched exactly one element for {target.description or 'target'}")
+                raise ElementNotFound(
+                    f"No locator strategy matched exactly one element for {target.description or 'target'}",
+                    tried=[describe_strategy(s) for s in target.strategies],
+                    ambiguous=ambiguous,
+                )
             page.wait_for_timeout(_POLL_INTERVAL_MS)
 
     # -- verification -------------------------------------------------------------------
@@ -207,7 +272,7 @@ class PlaywrightWebAdapter:
                 if check.contains not in text:
                     raise StepFailure("Element text does not contain the expected value")
                 result.detail = "element text matches"
-        except (PlaywrightError, StepFailure) as exc:
+        except (PlaywrightError, StepFailure, ElementNotFound) as exc:
             result.status = "failed"
             result.detail = _scrub(str(exc), secrets)
         return result

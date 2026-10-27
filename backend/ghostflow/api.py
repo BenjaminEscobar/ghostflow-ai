@@ -15,7 +15,7 @@ from ghostflow.ai import ModelProvider, ModelProviderError, RecordingContext, an
 from ghostflow.config import Settings, get_settings
 from ghostflow.dsl.models import Workflow
 from ghostflow.dsl.schema import workflow_json_schema
-from ghostflow.execution import ExecutionAdapter, InputError, redact_inputs
+from ghostflow.execution import ExecutionAdapter, Healer, InputError, RecoveryPolicy, redact_inputs
 from ghostflow.recording import RecordingCreate, RecordingRejectedError, compile_recording, sanitize_recording
 from ghostflow.recording.compiler import CompilationError
 from ghostflow.security import UrlNotAllowedError, UrlPolicy
@@ -263,11 +263,35 @@ def get_run(run_id: str, session: SessionDep) -> RunOut:
 AdapterFactory = Callable[[Settings, UrlPolicy], dict[str, ExecutionAdapter]]
 
 
-def default_adapters(settings: Settings, policy: UrlPolicy) -> dict[str, ExecutionAdapter]:
+def make_healer(settings: Settings, policy: UrlPolicy, provider: ModelProvider | None) -> Healer:
+    """Self-healing is off unless GHOSTFLOW_HEALING_ENABLED=true. It reuses the app's AI provider,
+    so Meta's request cap, timeout and token limit apply to recovery calls too."""
+    from ghostflow.ai.recovery import ModelRecoveryAdvisor
+
+    recovery_policy = RecoveryPolicy(
+        enabled=settings.healing_enabled,
+        min_confidence=settings.healing_min_confidence,
+        allow_side_effects=settings.healing_allow_side_effects,
+        max_candidates=settings.healing_max_candidates,
+        max_attempts_per_run=settings.healing_max_attempts_per_run,
+    )
+    advisor = ModelRecoveryAdvisor(provider) if settings.healing_enabled and provider is not None else None
+    return Healer(recovery_policy, policy, advisor)
+
+
+def default_adapters(
+    settings: Settings, policy: UrlPolicy, provider: ModelProvider | None = None
+) -> dict[str, ExecutionAdapter]:
     from ghostflow.execution.playwright_web import PlaywrightWebAdapter
 
     return {
-        "web": PlaywrightWebAdapter(policy, headless=settings.browser_headless, step_timeout_ms=settings.step_timeout_ms)
+        "web": PlaywrightWebAdapter(
+            policy,
+            headless=settings.browser_headless,
+            step_timeout_ms=settings.step_timeout_ms,
+            step_delay_ms=settings.step_delay_ms,
+            healer=make_healer(settings, policy, provider),
+        )
     }
 
 
@@ -275,7 +299,7 @@ def create_app(
     settings: Settings | None = None,
     *,
     provider: ModelProvider | None = None,
-    adapters: AdapterFactory = default_adapters,
+    adapters: AdapterFactory | None = None,
 ) -> FastAPI:
     settings = settings or get_settings()
     app = FastAPI(title="GhostFlow AI", version=__version__)
@@ -283,8 +307,14 @@ def create_app(
     app.state.policy = UrlPolicy(settings.allowed_origin_list)
     app.state.session_factory = make_session_factory(make_engine(settings.database_url))
     app.state.provider = provider or provider_from_settings(settings)
-    log.info("AI provider: %s (model %s)", app.state.provider.name, app.state.provider.model)
-    app.state.adapters = adapters(settings, app.state.policy)
+    log.info(
+        "AI provider: %s (model %s); self-healing %s",
+        app.state.provider.name, app.state.provider.model, "enabled" if settings.healing_enabled else "disabled",
+    )  # fmt: skip
+    if adapters is None:
+        app.state.adapters = default_adapters(settings, app.state.policy, app.state.provider)
+    else:
+        app.state.adapters = adapters(settings, app.state.policy)
     app.state.run_slots = threading.BoundedSemaphore(settings.max_concurrent_runs)
     app.include_router(router)
     return app
