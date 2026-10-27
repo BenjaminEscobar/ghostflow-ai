@@ -66,3 +66,21 @@ def redact_url(url: str) -> str:
         for k, v in parse_qsl(parts.query, keep_blank_values=True)
     ]
     return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query), ""))
+
+
+_CONTROL = re.compile(r"[\x00-\x1f\x7f]")
+_EMAIL = re.compile(r"[\w.+-]+@[\w-]+(\.[\w-]+)+")
+_LONG_NUMBER = re.compile(r"\d[\d .-]{3,}\d|\d{4,}")
+
+
+def scrub_text(text: str | None, limit: int = 200) -> str | None:
+    """Reduce page text (titles, labels, status messages) before it leaves GhostFlow.
+
+    Masks e-mail addresses, long digit runs (account, card or phone numbers) and anything
+    token-shaped, collapses whitespace and truncates. Returns None for empty input."""
+    if not text:
+        return None
+    words = _CONTROL.sub(" ", text).split()
+    words = ["[secret]" if looks_like_secret(w) else w for w in words]
+    out = _LONG_NUMBER.sub("[number]", _EMAIL.sub("[email]", " ".join(words)))
+    return out[:limit] or None
