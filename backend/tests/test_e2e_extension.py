@@ -29,8 +29,9 @@ def _free_port() -> int:
 
 
 @pytest.fixture
-def backend_url(tmp_path, portal_url):
+def backend_url(tmp_path, portal_url, local_http):
     port = _free_port()
+    local_http.allow(f"http://127.0.0.1:{port}")  # only this test backend, not loopback in general
     settings = Settings(
         database_url=f"sqlite:///{tmp_path / 'ext.db'}", allowed_origins=portal_url, step_timeout_ms=5_000
     )
