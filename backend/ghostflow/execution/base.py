@@ -12,6 +12,7 @@ from typing import Literal, Protocol
 from pydantic import BaseModel, Field
 
 from ghostflow.dsl.models import Workflow
+from ghostflow.execution.recovery import RecoveryAttempt
 
 
 class InputError(ValueError):
@@ -25,7 +26,13 @@ class StepResult(BaseModel):
     duration_ms: int = 0
     strategy_index: int | None = None
     strategy_by: str | None = None
+    # How the element was found: the recorded primary locator, a later recorded locator
+    # (deterministic fallback) or a candidate proposed by the AI and validated (ai_recovery).
+    resolution: Literal["primary", "deterministic_fallback", "ai_recovery"] | None = None
+    # GF-001 meaning, kept for compatibility: a later *recorded* locator was used. Never set by
+    # AI recovery; see `resolution` and `recovery`.
     healed: bool = False
+    recovery: RecoveryAttempt | None = None
     error: str | None = None
 
 
