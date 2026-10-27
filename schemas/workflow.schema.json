@@ -1,0 +1,784 @@
+{
+  "$defs": {
+    "CheckStep": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "action": {
+          "const": "check",
+          "title": "Action",
+          "type": "string"
+        },
+        "target": {
+          "$ref": "#/$defs/Target"
+        },
+        "checked": {
+          "default": true,
+          "title": "Checked",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "action",
+        "target"
+      ],
+      "title": "CheckStep",
+      "type": "object"
+    },
+    "ClickStep": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "action": {
+          "const": "click",
+          "title": "Action",
+          "type": "string"
+        },
+        "target": {
+          "$ref": "#/$defs/Target"
+        }
+      },
+      "required": [
+        "id",
+        "action",
+        "target"
+      ],
+      "title": "ClickStep",
+      "type": "object"
+    },
+    "CssStrategy": {
+      "additionalProperties": false,
+      "description": "A plain CSS selector. The executor always prefixes it with `css=`, so Playwright's\nother selector engines (xpath, internal:*, etc.) cannot be reached through it.",
+      "properties": {
+        "by": {
+          "const": "css",
+          "title": "By",
+          "type": "string"
+        },
+        "value": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Value",
+          "type": "string"
+        }
+      },
+      "required": [
+        "by",
+        "value"
+      ],
+      "title": "CssStrategy",
+      "type": "object"
+    },
+    "ElementText": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "element_text",
+          "title": "Type",
+          "type": "string"
+        },
+        "target": {
+          "$ref": "#/$defs/Target"
+        },
+        "contains": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Contains",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "target",
+        "contains"
+      ],
+      "title": "ElementText",
+      "type": "object"
+    },
+    "FillStep": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "action": {
+          "const": "fill",
+          "title": "Action",
+          "type": "string"
+        },
+        "target": {
+          "$ref": "#/$defs/Target"
+        },
+        "value": {
+          "maxLength": 2000,
+          "title": "Value",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "action",
+        "target",
+        "value"
+      ],
+      "title": "FillStep",
+      "type": "object"
+    },
+    "LabelStrategy": {
+      "additionalProperties": false,
+      "properties": {
+        "by": {
+          "const": "label",
+          "title": "By",
+          "type": "string"
+        },
+        "value": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Value",
+          "type": "string"
+        }
+      },
+      "required": [
+        "by",
+        "value"
+      ],
+      "title": "LabelStrategy",
+      "type": "object"
+    },
+    "NavigateStep": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "action": {
+          "const": "navigate",
+          "title": "Action",
+          "type": "string"
+        },
+        "url": {
+          "maxLength": 2048,
+          "minLength": 1,
+          "title": "Url",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "action",
+        "url"
+      ],
+      "title": "NavigateStep",
+      "type": "object"
+    },
+    "PlaceholderStrategy": {
+      "additionalProperties": false,
+      "properties": {
+        "by": {
+          "const": "placeholder",
+          "title": "By",
+          "type": "string"
+        },
+        "value": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Value",
+          "type": "string"
+        }
+      },
+      "required": [
+        "by",
+        "value"
+      ],
+      "title": "PlaceholderStrategy",
+      "type": "object"
+    },
+    "PressStep": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "action": {
+          "const": "press",
+          "title": "Action",
+          "type": "string"
+        },
+        "target": {
+          "$ref": "#/$defs/Target"
+        },
+        "key": {
+          "enum": [
+            "Enter",
+            "Tab",
+            "Escape"
+          ],
+          "title": "Key",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "action",
+        "target",
+        "key"
+      ],
+      "title": "PressStep",
+      "type": "object"
+    },
+    "RoleStrategy": {
+      "additionalProperties": false,
+      "properties": {
+        "by": {
+          "const": "role",
+          "title": "By",
+          "type": "string"
+        },
+        "role": {
+          "enum": [
+            "button",
+            "link",
+            "textbox",
+            "searchbox",
+            "combobox",
+            "listbox",
+            "option",
+            "checkbox",
+            "radio",
+            "switch",
+            "tab",
+            "menuitem",
+            "spinbutton",
+            "slider",
+            "row",
+            "cell"
+          ],
+          "title": "Role",
+          "type": "string"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Name"
+        }
+      },
+      "required": [
+        "by",
+        "role"
+      ],
+      "title": "RoleStrategy",
+      "type": "object"
+    },
+    "SelectStep": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "action": {
+          "const": "select",
+          "title": "Action",
+          "type": "string"
+        },
+        "target": {
+          "$ref": "#/$defs/Target"
+        },
+        "value": {
+          "maxLength": 2000,
+          "title": "Value",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "action",
+        "target",
+        "value"
+      ],
+      "title": "SelectStep",
+      "type": "object"
+    },
+    "Target": {
+      "additionalProperties": false,
+      "description": "An element, described by several locator strategies in priority order.\n\nThe executor uses the first strategy that matches exactly one element. Falling back to\na later strategy is how a workflow survives some UI changes (renamed ids, removed\ntest ids, restructured markup).",
+      "properties": {
+        "description": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "strategies": {
+          "items": {
+            "discriminator": {
+              "mapping": {
+                "css": "#/$defs/CssStrategy",
+                "label": "#/$defs/LabelStrategy",
+                "placeholder": "#/$defs/PlaceholderStrategy",
+                "role": "#/$defs/RoleStrategy",
+                "test_id": "#/$defs/TestIdStrategy",
+                "text": "#/$defs/TextStrategy"
+              },
+              "propertyName": "by"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/TestIdStrategy"
+              },
+              {
+                "$ref": "#/$defs/RoleStrategy"
+              },
+              {
+                "$ref": "#/$defs/LabelStrategy"
+              },
+              {
+                "$ref": "#/$defs/PlaceholderStrategy"
+              },
+              {
+                "$ref": "#/$defs/TextStrategy"
+              },
+              {
+                "$ref": "#/$defs/CssStrategy"
+              }
+            ]
+          },
+          "maxItems": 8,
+          "minItems": 1,
+          "title": "Strategies",
+          "type": "array"
+        }
+      },
+      "required": [
+        "strategies"
+      ],
+      "title": "Target",
+      "type": "object"
+    },
+    "TestIdStrategy": {
+      "additionalProperties": false,
+      "properties": {
+        "by": {
+          "const": "test_id",
+          "title": "By",
+          "type": "string"
+        },
+        "value": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Value",
+          "type": "string"
+        }
+      },
+      "required": [
+        "by",
+        "value"
+      ],
+      "title": "TestIdStrategy",
+      "type": "object"
+    },
+    "TextStrategy": {
+      "additionalProperties": false,
+      "properties": {
+        "by": {
+          "const": "text",
+          "title": "By",
+          "type": "string"
+        },
+        "value": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Value",
+          "type": "string"
+        }
+      },
+      "required": [
+        "by",
+        "value"
+      ],
+      "title": "TextStrategy",
+      "type": "object"
+    },
+    "TextVisible": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "text_visible",
+          "title": "Type",
+          "type": "string"
+        },
+        "text": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "text"
+      ],
+      "title": "TextVisible",
+      "type": "object"
+    },
+    "UrlPath": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "url_path",
+          "title": "Type",
+          "type": "string"
+        },
+        "path": {
+          "pattern": "^/[^\\s?#]{0,1023}$",
+          "title": "Path",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "path"
+      ],
+      "title": "UrlPath",
+      "type": "object"
+    },
+    "WaitForUrlStep": {
+      "additionalProperties": false,
+      "description": "Wait until the page URL path equals `path` (query string and fragment ignored).",
+      "properties": {
+        "id": {
+          "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "action": {
+          "const": "wait_for_url",
+          "title": "Action",
+          "type": "string"
+        },
+        "path": {
+          "pattern": "^/[^\\s?#]{0,1023}$",
+          "title": "Path",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "action",
+        "path"
+      ],
+      "title": "WaitForUrlStep",
+      "type": "object"
+    },
+    "WorkflowInput": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "pattern": "^[a-z][a-z0-9_]{0,39}$",
+          "title": "Name",
+          "type": "string"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Label"
+        },
+        "sensitive": {
+          "default": false,
+          "title": "Sensitive",
+          "type": "boolean"
+        },
+        "default": {
+          "anyOf": [
+            {
+              "maxLength": 2000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Default"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "WorkflowInput",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "dsl_version": {
+      "const": "0.1",
+      "default": "0.1",
+      "title": "Dsl Version",
+      "type": "string"
+    },
+    "name": {
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "Name",
+      "type": "string"
+    },
+    "description": {
+      "anyOf": [
+        {
+          "maxLength": 2000,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Description"
+    },
+    "adapter": {
+      "const": "web",
+      "default": "web",
+      "title": "Adapter",
+      "type": "string"
+    },
+    "allowed_origins": {
+      "items": {
+        "maxLength": 2048,
+        "minLength": 1,
+        "type": "string"
+      },
+      "maxItems": 10,
+      "minItems": 1,
+      "title": "Allowed Origins",
+      "type": "array"
+    },
+    "inputs": {
+      "items": {
+        "$ref": "#/$defs/WorkflowInput"
+      },
+      "maxItems": 50,
+      "title": "Inputs",
+      "type": "array"
+    },
+    "steps": {
+      "items": {
+        "discriminator": {
+          "mapping": {
+            "check": "#/$defs/CheckStep",
+            "click": "#/$defs/ClickStep",
+            "fill": "#/$defs/FillStep",
+            "navigate": "#/$defs/NavigateStep",
+            "press": "#/$defs/PressStep",
+            "select": "#/$defs/SelectStep",
+            "wait_for_url": "#/$defs/WaitForUrlStep"
+          },
+          "propertyName": "action"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/$defs/NavigateStep"
+          },
+          {
+            "$ref": "#/$defs/ClickStep"
+          },
+          {
+            "$ref": "#/$defs/FillStep"
+          },
+          {
+            "$ref": "#/$defs/SelectStep"
+          },
+          {
+            "$ref": "#/$defs/CheckStep"
+          },
+          {
+            "$ref": "#/$defs/PressStep"
+          },
+          {
+            "$ref": "#/$defs/WaitForUrlStep"
+          }
+        ]
+      },
+      "maxItems": 200,
+      "minItems": 1,
+      "title": "Steps",
+      "type": "array"
+    },
+    "verify": {
+      "items": {
+        "discriminator": {
+          "mapping": {
+            "element_text": "#/$defs/ElementText",
+            "text_visible": "#/$defs/TextVisible",
+            "url_path": "#/$defs/UrlPath"
+          },
+          "propertyName": "type"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/$defs/TextVisible"
+          },
+          {
+            "$ref": "#/$defs/UrlPath"
+          },
+          {
+            "$ref": "#/$defs/ElementText"
+          }
+        ]
+      },
+      "maxItems": 20,
+      "title": "Verify",
+      "type": "array"
+    }
+  },
+  "required": [
+    "name",
+    "allowed_origins",
+    "steps"
+  ],
+  "title": "Workflow",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ghostflow.dev/schemas/workflow-0.1.json"
+}
