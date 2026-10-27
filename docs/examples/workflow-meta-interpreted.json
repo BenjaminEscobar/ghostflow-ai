@@ -1,0 +1,536 @@
+{
+  "dsl_version": "0.1",
+  "name": "Registrar solicitud empresarial",
+  "description": "El operador ingresa al Portal Andina Servicios con sus credenciales, accede a la opción de nueva solicitud y registra una solicitud empresarial indicando cliente, correo, categoría, prioridad media y descripción, con notificación por correo activada, hasta obtener la confirmación de registro.",
+  "adapter": "web",
+  "allowed_origins": [
+    "http://localhost:8080"
+  ],
+  "inputs": [
+    {
+      "name": "usuario",
+      "label": "Usuario",
+      "sensitive": false,
+      "default": null
+    },
+    {
+      "name": "contrasena",
+      "label": "Contraseña",
+      "sensitive": true,
+      "default": null
+    },
+    {
+      "name": "nombre_del_cliente",
+      "label": "Nombre del cliente",
+      "sensitive": false,
+      "default": null
+    },
+    {
+      "name": "correo_del_cliente",
+      "label": "Correo del cliente",
+      "sensitive": false,
+      "default": null
+    },
+    {
+      "name": "categoria",
+      "label": "Categoría",
+      "sensitive": false,
+      "default": null
+    },
+    {
+      "name": "descripcion",
+      "label": "Descripción",
+      "sensitive": false,
+      "default": null
+    }
+  ],
+  "steps": [
+    {
+      "id": "s1",
+      "description": "Iniciar el acceso al portal de ingreso.",
+      "action": "navigate",
+      "url": "http://localhost:8080/index.html"
+    },
+    {
+      "id": "s2",
+      "description": "Aportar la identidad del operador.",
+      "action": "fill",
+      "target": {
+        "description": "textbox \"Usuario\"",
+        "strategies": [
+          {
+            "by": "test_id",
+            "value": "login-username"
+          },
+          {
+            "by": "role",
+            "role": "textbox",
+            "name": "Usuario"
+          },
+          {
+            "by": "label",
+            "value": "Usuario"
+          },
+          {
+            "by": "css",
+            "value": "#username"
+          },
+          {
+            "by": "css",
+            "value": "input[name=\"username\"]"
+          }
+        ]
+      },
+      "value": "{{inputs.usuario}}"
+    },
+    {
+      "id": "s3",
+      "description": "Aportar la clave de acceso del operador.",
+      "action": "fill",
+      "target": {
+        "description": "input \"Contraseña\"",
+        "strategies": [
+          {
+            "by": "test_id",
+            "value": "login-password"
+          },
+          {
+            "by": "label",
+            "value": "Contraseña"
+          },
+          {
+            "by": "css",
+            "value": "#password"
+          },
+          {
+            "by": "css",
+            "value": "input[name=\"password\"]"
+          }
+        ]
+      },
+      "value": "{{inputs.contrasena}}"
+    },
+    {
+      "id": "s4",
+      "description": "Validar credenciales e ingresar al sistema.",
+      "action": "click",
+      "target": {
+        "description": "button \"Ingresar\"",
+        "strategies": [
+          {
+            "by": "test_id",
+            "value": "login-submit"
+          },
+          {
+            "by": "role",
+            "role": "button",
+            "name": "Ingresar"
+          },
+          {
+            "by": "text",
+            "value": "Ingresar"
+          },
+          {
+            "by": "css",
+            "value": "#login-form > button:nth-of-type(1)"
+          }
+        ]
+      }
+    },
+    {
+      "id": "s5",
+      "description": "Esperar la carga del panel principal.",
+      "action": "wait_for_url",
+      "path": "/dashboard.html"
+    },
+    {
+      "id": "s6",
+      "description": "Iniciar la creación de una nueva solicitud.",
+      "action": "click",
+      "target": {
+        "description": "link \"Nueva solicitud\"",
+        "strategies": [
+          {
+            "by": "test_id",
+            "value": "nav-new-request"
+          },
+          {
+            "by": "role",
+            "role": "link",
+            "name": "Nueva solicitud"
+          },
+          {
+            "by": "text",
+            "value": "Nueva solicitud"
+          },
+          {
+            "by": "css",
+            "value": "body > main:nth-of-type(1) > nav:nth-of-type(1) > a:nth-of-type(1)"
+          }
+        ]
+      }
+    },
+    {
+      "id": "s7",
+      "description": "Esperar la carga del formulario de solicitud.",
+      "action": "wait_for_url",
+      "path": "/new-request.html"
+    },
+    {
+      "id": "s8",
+      "description": "Indicar el cliente beneficiario de la solicitud.",
+      "action": "fill",
+      "target": {
+        "description": "textbox \"Nombre del cliente\"",
+        "strategies": [
+          {
+            "by": "test_id",
+            "value": "customer-name"
+          },
+          {
+            "by": "role",
+            "role": "textbox",
+            "name": "Nombre del cliente"
+          },
+          {
+            "by": "label",
+            "value": "Nombre del cliente"
+          },
+          {
+            "by": "css",
+            "value": "#customer-name"
+          },
+          {
+            "by": "css",
+            "value": "input[name=\"customer_name\"]"
+          }
+        ]
+      },
+      "value": "{{inputs.nombre_del_cliente}}"
+    },
+    {
+      "id": "s9",
+      "description": "Indicar el correo de contacto del cliente.",
+      "action": "fill",
+      "target": {
+        "description": "textbox \"Correo del cliente\"",
+        "strategies": [
+          {
+            "by": "role",
+            "role": "textbox",
+            "name": "Correo del cliente"
+          },
+          {
+            "by": "label",
+            "value": "Correo del cliente"
+          },
+          {
+            "by": "placeholder",
+            "value": "cliente@ejemplo.test"
+          },
+          {
+            "by": "css",
+            "value": "#customer-email"
+          },
+          {
+            "by": "css",
+            "value": "input[name=\"customer_email\"]"
+          }
+        ]
+      },
+      "value": "{{inputs.correo_del_cliente}}"
+    },
+    {
+      "id": "s10",
+      "description": "Clasificar la solicitud por categoría.",
+      "action": "select",
+      "target": {
+        "description": "combobox \"Categoría\"",
+        "strategies": [
+          {
+            "by": "test_id",
+            "value": "category"
+          },
+          {
+            "by": "role",
+            "role": "combobox",
+            "name": "Categoría"
+          },
+          {
+            "by": "label",
+            "value": "Categoría"
+          },
+          {
+            "by": "css",
+            "value": "#category"
+          },
+          {
+            "by": "css",
+            "value": "select[name=\"category\"]"
+          }
+        ]
+      },
+      "value": "{{inputs.categoria}}"
+    },
+    {
+      "id": "s11",
+      "description": "Asignar prioridad media a la solicitud.",
+      "action": "check",
+      "target": {
+        "description": "radio \"Media\"",
+        "strategies": [
+          {
+            "by": "role",
+            "role": "radio",
+            "name": "Media"
+          },
+          {
+            "by": "label",
+            "value": "Media"
+          },
+          {
+            "by": "css",
+            "value": "input[name=\"priority\"][value=\"media\"]"
+          },
+          {
+            "by": "css",
+            "value": "#request-form > fieldset:nth-of-type(1) > label:nth-of-type(2) > input:nth-of-type(1)"
+          }
+        ]
+      },
+      "checked": true
+    },
+    {
+      "id": "s12",
+      "description": "Detallar el motivo de la solicitud.",
+      "action": "fill",
+      "target": {
+        "description": "textbox \"Descripción\"",
+        "strategies": [
+          {
+            "by": "role",
+            "role": "textbox",
+            "name": "Descripción"
+          },
+          {
+            "by": "label",
+            "value": "Descripción"
+          },
+          {
+            "by": "css",
+            "value": "#description"
+          },
+          {
+            "by": "css",
+            "value": "textarea[name=\"description\"]"
+          }
+        ]
+      },
+      "value": "{{inputs.descripcion}}"
+    },
+    {
+      "id": "s13",
+      "description": "Activar la notificación por correo al cliente.",
+      "action": "check",
+      "target": {
+        "description": "checkbox \"Notificar al cliente por correo\"",
+        "strategies": [
+          {
+            "by": "role",
+            "role": "checkbox",
+            "name": "Notificar al cliente por correo"
+          },
+          {
+            "by": "label",
+            "value": "Notificar al cliente por correo"
+          },
+          {
+            "by": "css",
+            "value": "#notify"
+          },
+          {
+            "by": "css",
+            "value": "input[name=\"notify\"]"
+          }
+        ]
+      },
+      "checked": true
+    },
+    {
+      "id": "s14",
+      "description": "Confirmar y crear la solicitud empresarial.",
+      "action": "click",
+      "target": {
+        "description": "button \"Crear solicitud\"",
+        "strategies": [
+          {
+            "by": "test_id",
+            "value": "submit-request"
+          },
+          {
+            "by": "role",
+            "role": "button",
+            "name": "Crear solicitud"
+          },
+          {
+            "by": "css",
+            "value": "#submit-request"
+          },
+          {
+            "by": "text",
+            "value": "Crear solicitud"
+          }
+        ]
+      }
+    },
+    {
+      "id": "s15",
+      "description": "Esperar la pantalla de confirmación del registro.",
+      "action": "wait_for_url",
+      "path": "/confirmation.html"
+    }
+  ],
+  "verify": [
+    {
+      "type": "text_visible",
+      "text": "Solicitud registrada correctamente"
+    },
+    {
+      "type": "url_path",
+      "path": "/confirmation.html"
+    }
+  ],
+  "interpretation": {
+    "provider": "meta",
+    "model": "muse-spark-1.3",
+    "generated_at": "2026-10-27T16:04:10.641142Z",
+    "purpose": "Registrar una nueva solicitud empresarial en el Portal Andina Servicios para un cliente. Se utiliza cuando un operador debe dar de alta una petición con sus datos, categoría y prioridad.",
+    "expected_outcome": "Solicitud registrada correctamente y página de confirmación visible.",
+    "preconditions": [
+      "Tener cuenta activa en Portal Andina Servicios.",
+      "Disponer del nombre y correo del cliente.",
+      "Conocer la categoría y descripción de la solicitud a registrar."
+    ],
+    "inputs": [
+      {
+        "name": "usuario",
+        "kind": "identifier",
+        "role": "parameter",
+        "description": "Nombre de usuario para ingresar al portal."
+      },
+      {
+        "name": "contrasena",
+        "kind": "credential",
+        "role": "credential",
+        "description": "Clave secreta de acceso al portal."
+      },
+      {
+        "name": "nombre_del_cliente",
+        "kind": "person_name",
+        "role": "parameter",
+        "description": "Nombre completo del cliente para quien se crea la solicitud."
+      },
+      {
+        "name": "correo_del_cliente",
+        "kind": "email",
+        "role": "parameter",
+        "description": "Dirección de correo del cliente para contacto y notificación."
+      },
+      {
+        "name": "categoria",
+        "kind": "choice",
+        "role": "parameter",
+        "description": "Categoría o tipo de la solicitud empresarial."
+      },
+      {
+        "name": "descripcion",
+        "kind": "free_text",
+        "role": "parameter",
+        "description": "Detalle breve del motivo de la solicitud empresarial."
+      }
+    ],
+    "steps": [
+      {
+        "id": "s1",
+        "explanation": "Sitúa al operador en el punto de partida del proceso.",
+        "relevance": "navigation"
+      },
+      {
+        "id": "s2",
+        "explanation": "Permite identificar la cuenta que realizará el registro.",
+        "relevance": "critical"
+      },
+      {
+        "id": "s3",
+        "explanation": "Completa la autenticación para entrar al sistema.",
+        "relevance": "critical"
+      },
+      {
+        "id": "s4",
+        "explanation": "Autoriza el acceso al panel para gestionar solicitudes.",
+        "relevance": "critical"
+      },
+      {
+        "id": "s5",
+        "explanation": "Confirma que el ingreso fue exitoso antes de continuar.",
+        "relevance": "navigation"
+      },
+      {
+        "id": "s6",
+        "explanation": "Abre el formulario necesario para registrar la petición.",
+        "relevance": "supporting"
+      },
+      {
+        "id": "s7",
+        "explanation": "Asegura que el formulario está listo para completarse.",
+        "relevance": "navigation"
+      },
+      {
+        "id": "s8",
+        "explanation": "Identifica para quién se crea la solicitud empresarial.",
+        "relevance": "supporting"
+      },
+      {
+        "id": "s9",
+        "explanation": "Permite contactar y notificar al cliente sobre su solicitud.",
+        "relevance": "supporting"
+      },
+      {
+        "id": "s10",
+        "explanation": "Permite tipificar y derivar la solicitud según su tipo.",
+        "relevance": "supporting"
+      },
+      {
+        "id": "s11",
+        "explanation": "Define el nivel de urgencia con que se tratará la petición.",
+        "relevance": "supporting"
+      },
+      {
+        "id": "s12",
+        "explanation": "Aporta el contexto necesario para atender la petición.",
+        "relevance": "supporting"
+      },
+      {
+        "id": "s13",
+        "explanation": "Asegura que el cliente sea informado del registro.",
+        "relevance": "supporting"
+      },
+      {
+        "id": "s14",
+        "explanation": "Guarda la solicitud en el sistema y genera el registro.",
+        "relevance": "critical"
+      },
+      {
+        "id": "s15",
+        "explanation": "Verifica que la solicitud quedó registrada correctamente.",
+        "relevance": "navigation"
+      }
+    ],
+    "review_notes": [
+      "Prioridad fijada en Media sin opción de cambio, verificar si debe ser parámetro.",
+      "Notificación por correo siempre activada, confirmar si es obligatorio.",
+      "Contraseña es dato sensible y no debe registrarse en logs.",
+      "Descripción registrada como texto corto de 1-3 palabras, puede ser insuficiente."
+    ]
+  }
+}
