@@ -1,0 +1,48 @@
+name: ghostflow
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ghostflow
+      POSTGRES_USER: ghostflow
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Define POSTGRES_PASSWORD en .env (ver .env.example)}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ghostflow -d ghostflow"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  demo-portal:
+    image: nginx:1.27-alpine
+    volumes:
+      - ./demo-portal:/usr/share/nginx/html:ro
+      - ./infra/demo-portal.nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    ports:
+      # Published on loopback only.
+      - "127.0.0.1:8080:8080"
+      # The backend shares this container's network namespace (see below), so its port
+      # is published here.
+      - "127.0.0.1:8000:8000"
+
+  backend:
+    build: ./backend
+    # Sharing the portal's network namespace makes http://localhost:8080 resolve to the
+    # demo portal inside the backend's browser, exactly as in the host browser where the
+    # extension recorded it. No URL rewriting needed.
+    network_mode: "service:demo-portal"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      demo-portal:
+        condition: service_started
+    environment:
+      GHOSTFLOW_DATABASE_URL: postgresql+psycopg://ghostflow:${POSTGRES_PASSWORD}@postgres:5432/ghostflow
+      GHOSTFLOW_ALLOWED_ORIGINS: http://localhost:8080,http://127.0.0.1:8080
+      GHOSTFLOW_AI_PROVIDER: mock
+    shm_size: "1gb"
+
+volumes:
+  pgdata:
