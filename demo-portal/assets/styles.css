@@ -1,0 +1,86 @@
+:root {
+  --bg: #f4f6f8;
+  --fg: #1d2733;
+  --muted: #5b6b7c;
+  --accent: #1f6feb;
+  --danger: #b42318;
+  --ok: #067647;
+  --card: #ffffff;
+  --border: #d6dde4;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: var(--bg);
+  color: var(--fg);
+}
+
+.topbar {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 24px;
+  background: var(--fg);
+  color: #fff;
+}
+
+.badge {
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.card {
+  max-width: 720px;
+  margin: 32px auto;
+  padding: 24px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.card.narrow { max-width: 420px; }
+
+h1 { margin-top: 0; font-size: 24px; }
+
+label { display: block; margin: 12px 0 4px; font-weight: 600; }
+label.inline { display: inline-flex; gap: 6px; align-items: center; font-weight: 400; margin-right: 16px; }
+
+input[type="text"], input[type="email"], input[type="password"], select, textarea {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font: inherit;
+}
+
+fieldset { border: 0; padding: 0; margin: 12px 0 0; }
+legend { font-weight: 600; margin-bottom: 4px; }
+
+button, .button {
+  display: inline-block;
+  margin-top: 16px;
+  padding: 10px 16px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--accent);
+  color: #fff;
+  font: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.button.secondary { background: var(--muted); }
+.actions { display: flex; gap: 12px; flex-wrap: wrap; }
+.hint { color: var(--muted); font-size: 14px; }
+.error { color: var(--danger); min-height: 1.5em; margin-top: 8px; }
+.success { color: var(--ok); font-weight: 600; min-height: 1.5em; }
+.summary { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; }
+.summary dt { color: var(--muted); }
+.summary dd { margin: 0; }
+.table { width: 100%; border-collapse: collapse; }
+.table th, .table td { text-align: left; padding: 8px; border-bottom: 1px solid var(--border); }

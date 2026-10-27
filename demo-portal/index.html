@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ingreso · Portal Andina Servicios (demo)</title>
+  <link rel="stylesheet" href="assets/styles.css">
+</head>
+<body data-page="login">
+  <header class="topbar"><strong>Andina Servicios</strong><span class="badge">Portal ficticio · datos sintéticos</span></header>
+  <main class="card narrow">
+    <h1>Ingreso al portal</h1>
+    <p class="hint">Credenciales de demostración (ficticias): usuario <code>demo</code>, contraseña <code>ghostflow-demo</code>.</p>
+    <form id="login-form" novalidate>
+      <label for="username">Usuario</label>
+      <input id="username" name="username" type="text" autocomplete="username" data-testid="login-username" required>
+
+      <label for="password">Contraseña</label>
+      <input id="password" name="password" type="password" autocomplete="current-password" data-testid="login-password" required>
+
+      <div id="login-error" class="error" role="alert"></div>
+      <button type="submit" data-testid="login-submit">Ingresar</button>
+    </form>
+  </main>
+  <script src="assets/app.js"></script>
+</body>
+</html>

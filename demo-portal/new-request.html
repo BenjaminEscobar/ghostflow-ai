@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Nueva solicitud · Portal Andina Servicios (demo)</title>
+  <link rel="stylesheet" href="assets/styles.css">
+</head>
+<body data-page="new-request">
+  <header class="topbar"><strong>Andina Servicios</strong><span class="badge">Portal ficticio · datos sintéticos</span></header>
+  <main class="card">
+    <h1>Nueva solicitud</h1>
+    <form id="request-form" novalidate>
+      <div class="field">
+        <label for="customer-name">Nombre del cliente</label>
+        <input id="customer-name" name="customer_name" type="text" data-testid="customer-name" required>
+      </div>
+      <div class="field">
+        <label for="customer-email">Correo del cliente</label>
+        <input id="customer-email" name="customer_email" type="email" placeholder="cliente@ejemplo.test" required>
+      </div>
+      <div class="field">
+        <label for="category">Categoría</label>
+        <select id="category" name="category" data-testid="category" required>
+          <option value="">Seleccione…</option>
+          <option value="soporte">Soporte técnico</option>
+          <option value="facturacion">Facturación</option>
+          <option value="logistica">Logística</option>
+        </select>
+      </div>
+      <fieldset class="field">
+        <legend>Prioridad</legend>
+        <label class="inline"><input type="radio" name="priority" value="baja" checked> Baja</label>
+        <label class="inline"><input type="radio" name="priority" value="media"> Media</label>
+        <label class="inline"><input type="radio" name="priority" value="alta"> Alta</label>
+      </fieldset>
+      <div class="field">
+        <label for="description">Descripción</label>
+        <textarea id="description" name="description" rows="3" required></textarea>
+      </div>
+      <div class="field">
+        <label class="inline"><input id="notify" name="notify" type="checkbox"> Notificar al cliente por correo</label>
+      </div>
+      <div id="form-error" class="error" role="alert"></div>
+      <button type="submit" id="submit-request" data-testid="submit-request">Crear solicitud</button>
+    </form>
+  </main>
+  <script src="assets/app.js"></script>
+</body>
+</html>
