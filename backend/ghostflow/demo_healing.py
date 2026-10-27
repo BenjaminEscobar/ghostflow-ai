@@ -1,28 +1,30 @@
-"""GF-003 demonstration: the same workflow on the original portal and on a redesigned one.
+"""GF-003/GF-004 demonstration: the same workflow on the original portal and on a redesigned one.
 
     python -m ghostflow.demo_healing                     # A, B and C with the offline mock
-    python -m ghostflow.demo_healing --provider meta     # C asks Meta Muse Spark (1 request max)
+    python -m ghostflow.demo_healing --provider meta     # C asks Meta Muse Spark (1 request max,
+                                                         # after an explicit confirmation)
 
 A. original portal, self-healing off         → passes with the recorded locators
 B. "crear-requerimiento" variant, healing off → fails: every locator of "Nueva solicitud" finds nothing
 C. same variant, healing on                   → the provider proposes a candidate, GhostFlow validates it,
                                                 the run completes
 
-The workflow is compiled once from docs/examples/demo-recording.json and reused unchanged in the
-three runs (its SHA-256 is printed before and after). The portal is served on one fixed origin
+The workflow is compiled once from docs/examples/demo-recording.json (or read from --workflow-file)
+and reused unchanged in the three runs (its SHA-256 is recorded before and after). Progress is
+written to a demo evidence bundle (ghostflow/evidence.py) that the Demo Console at /console shows
+while the runner works. The portal is served on one fixed origin
 (default http://localhost:8080, the recording's origin), switching only the files behind it.
 Meta is used only with an explicit `--provider meta`, with retries off and a hard cap of one request.
 """
 
 import argparse
-import functools
-import hashlib
 import json
 import logging
 import shutil
 import sys
 import tempfile
 import threading
+from datetime import UTC, datetime
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -78,7 +80,49 @@ class SwitchableStaticServer:
 
 
 def workflow_digest(workflow) -> str:
-    return hashlib.sha256(workflow.model_dump_json().encode()).hexdigest()
+    from ghostflow.evidence import workflow_digest as digest
+
+    return digest(workflow)
+
+
+def compile_example(settings):
+    """The GF-003 demo workflow: docs/examples/demo-recording.json compiled deterministically."""
+    from ghostflow.recording import RecordingCreate, compile_recording, sanitize_recording
+    from ghostflow.security import UrlPolicy
+
+    recording = sanitize_recording(
+        RecordingCreate.model_validate(json.loads(RECORDING_FILE.read_text(encoding="utf-8"))),
+        UrlPolicy(settings.allowed_origin_list),
+    )
+    return compile_recording(recording)  # no AI call
+
+
+DEMO_PASSWORD = "ghostflow-demo"  # the demo portal's synthetic credential, shown on its own login page
+
+
+def _parse_inputs(pairs: list[str] | None) -> dict[str, str]:
+    values = {}
+    for pair in pairs or []:
+        name, sep, value = pair.partition("=")
+        if not sep or not name.strip():
+            raise SystemExit(f"--input expects NAME=VALUE, got {pair!r}")
+        values[name.strip()] = value
+    return values
+
+
+def _confirm_meta(model: str, assume_yes: bool) -> bool:
+    """Real Meta requests need an explicit yes: the flag, or typing 'meta' at a terminal."""
+    print(
+        f"\n  Scenario C will call the REAL Meta Model API ({model}).\n"
+        "  At most 1 request (retries off, hard cap 1). Scenarios A and B never call Meta.\n",
+        file=sys.stderr,
+    )
+    if assume_yes:
+        return True
+    if not sys.stdin.isatty():
+        print("  Not confirmed: pass --confirm-meta or run it in a terminal.", file=sys.stderr)
+        return False
+    return input("  Type 'meta' to confirm: ").strip().lower() == "meta"
 
 
 def _summary(name: str, result) -> dict:
@@ -100,36 +144,59 @@ def _summary(name: str, result) -> dict:
 
 
 def main(argv: list[str] | None = None) -> int:
+    from ghostflow.config import Settings
+
+    settings = Settings()
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--provider", choices=["mock", "meta"], default="mock", help="Advisor for scenario C (default: mock)")
+    parser.add_argument("--confirm-meta", action="store_true", help="Confirm the single real Meta request without a prompt")
     parser.add_argument("--variant", default=DEFAULT_VARIANT)
     parser.add_argument("--port", type=int, default=8080, help="Port of http://localhost:<port> (must match the recording)")
     parser.add_argument("--headed", action="store_true", help="Show the browser")
-    parser.add_argument("--delay-ms", type=int, default=0, help="Pause between steps (for filming)")
+    parser.add_argument("--delay-ms", type=int, default=settings.step_delay_ms, help="Pause between steps (for filming)")
+    parser.add_argument("--hold-ms", type=int, default=settings.final_hold_ms, help="Keep the final page visible this long")
     parser.add_argument("--step-timeout-ms", type=int, default=4000)
     parser.add_argument("--only", choices=["A", "B", "C"], action="append", help="Run only these scenarios")
-    parser.add_argument("--out", type=Path, help="Write the evidence as JSON")
+    parser.add_argument("--workflow-file", type=Path, help="Workflow JSON (see `python -m ghostflow.evidence export-workflow`)")
+    parser.add_argument("--input", action="append", metavar="NAME=VALUE", help="Input value (new data); repeatable")
+    parser.add_argument("--evidence-dir", type=Path, default=Path(settings.demo_evidence_dir), help="Where bundles go")
+    parser.add_argument("--name", help="Bundle file name (default: <UTC time>-<provider>)")
+    parser.add_argument("--out", type=Path, help="Also write the GF-003 style summary JSON here")
     args = parser.parse_args(argv)
+    if not (0 <= args.delay_ms <= 5000 and 0 <= args.hold_ms <= 30000):
+        parser.error("--delay-ms must be 0..5000 and --hold-ms 0..30000")
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s %(message)s")
     logging.getLogger("httpx").setLevel(logging.WARNING)
 
     from ghostflow.ai import MetaModelProvider, MockModelProvider
     from ghostflow.ai.recovery import ModelRecoveryAdvisor
-    from ghostflow.config import Settings
+    from ghostflow.dsl.models import Workflow
+    from ghostflow.evidence import AiSource, AiUsage, EvidenceBundle, apply_event, finish_scenario, new_scenario
+    from ghostflow.evidence import outline_workflow, scenario_title, write_bundle
+    from ghostflow.execution import resolve_inputs
     from ghostflow.execution.playwright_web import PlaywrightWebAdapter
     from ghostflow.execution.recovery import Healer, RecoveryPolicy
-    from ghostflow.recording import RecordingCreate, compile_recording, sanitize_recording
     from ghostflow.security import UrlPolicy
 
-    settings = Settings()
     policy = UrlPolicy(settings.allowed_origin_list)
-    recording = sanitize_recording(
-        RecordingCreate.model_validate(json.loads(RECORDING_FILE.read_text(encoding="utf-8"))), policy
-    )
-    workflow = compile_recording(recording)  # deterministic; no AI call
-    digest_before = workflow_digest(workflow)
-    password = "ghostflow-demo"  # the demo portal's synthetic credential, shown on its own login page
+    if args.workflow_file:
+        workflow = Workflow.model_validate_json(args.workflow_file.read_text(encoding="utf-8"))
+        policy.restricted_to(workflow.allowed_origins)  # same origin checks as the API
+        source = f"Workflow file {args.workflow_file.name}"
+    else:
+        workflow = compile_example(settings)
+        source = "Compiled from docs/examples/demo-recording.json (deterministic, no AI)"
+    declared = {i.name for i in workflow.inputs}
+    provided = _parse_inputs(args.input)
+    ignored = sorted(set(provided) - declared)
+    if ignored:
+        print(f"Ignoring inputs this workflow does not declare: {ignored}", file=sys.stderr)
+    values = {k: v for k, v in provided.items() if k in declared}
+    for i in workflow.inputs:
+        if i.sensitive and i.name not in values:
+            values[i.name] = DEMO_PASSWORD
+    resolve_inputs(workflow, values)  # fail early on missing inputs, before any browser or AI work
 
     provider = None
     if args.provider == "meta":
@@ -137,6 +204,10 @@ def main(argv: list[str] | None = None) -> int:
         if not key:
             print("--provider meta requiere GHOSTFLOW_META_API_KEY (backend/.env o variable exportada).", file=sys.stderr)
             return 2
+        if "C" not in set(args.only or ["A", "B", "C"]):
+            print("Scenario C is not selected: Meta will not be called.", file=sys.stderr)
+        elif not _confirm_meta(settings.meta_model, args.confirm_meta):
+            return 3
         provider = MetaModelProvider(
             api_key=settings.meta_api_key,
             base_url=settings.meta_api_base_url,
@@ -148,9 +219,9 @@ def main(argv: list[str] | None = None) -> int:
             max_requests=1,  # hard cap for this demo, whatever happens
             allow_contributor_mode=settings.meta_allow_contributor_mode,
         )
-        print(f"Escenario C usará Meta ({settings.meta_model}): como máximo 1 solicitud.", file=sys.stderr)
     else:
         provider = MockModelProvider()
+        print("Scenario C uses the offline mock: SIMULATED recovery, no Meta request.", file=sys.stderr)
 
     def adapter(healing: bool) -> PlaywrightWebAdapter:
         recovery_policy = RecoveryPolicy(
@@ -162,47 +233,99 @@ def main(argv: list[str] | None = None) -> int:
         )
         healer = Healer(recovery_policy, policy, ModelRecoveryAdvisor(provider) if healing else None)
         return PlaywrightWebAdapter(
-            policy, headless=not args.headed, step_timeout_ms=args.step_timeout_ms, step_delay_ms=args.delay_ms, healer=healer
+            policy,
+            headless=not args.headed,
+            step_timeout_ms=args.step_timeout_ms,
+            step_delay_ms=args.delay_ms,
+            final_hold_ms=args.hold_ms,
+            healer=healer,
         )
 
     wanted = set(args.only or ["A", "B", "C"])
-    evidence: dict = {"workflow": workflow.name, "workflow_sha256_before": digest_before, "scenarios": []}
+    started = datetime.now(UTC)
+    name = args.name or f"{started:%Y%m%d-%H%M%S}-{args.provider}"
+    bundle_path = args.evidence_dir / f"{name}.json"
+    is_meta = isinstance(provider, MetaModelProvider)
+    bundle = EvidenceBundle(
+        title=f"A/B/C self-healing demo · {'Meta Muse Spark' if is_meta else 'offline mock'}",
+        created_at=started,
+        updated_at=started,
+        origin="demo_runner",
+        provenance=f"python -m ghostflow.demo_healing --provider {args.provider} (delay {args.delay_ms} ms)",
+        ai=AiSource(provider=args.provider, model=provider.model, request_cap=1 if is_meta else None),
+        workflow=outline_workflow(workflow, source),
+    )
+    digest_before = bundle.workflow.sha256_before
+    plan = [
+        ("A", scenario_title("A", "original", False), "original", False),
+        ("B", scenario_title("B", args.variant, False), args.variant, False),
+        ("C", scenario_title("C", args.variant, True, args.provider), args.variant, True),
+    ]
+    plan = [p for p in plan if p[0] in wanted]
+    for key, title, portal, healing in plan:
+        bundle.scenarios.append(new_scenario(key, title, portal=portal, healing=healing, workflow=workflow, inputs=values))
+    lock = threading.Lock()
+
+    def save() -> None:
+        with lock:
+            if is_meta:
+                bundle.ai.requests_sent = provider.requests_sent
+                totals = provider.usage_totals
+                bundle.ai.usage = AiUsage(**{k: totals.get(k, 0) for k in AiUsage.model_fields})
+            write_bundle(bundle_path, bundle)
+
+    save()
+    print(f"Demo Console: http://127.0.0.1:8010/console/  (bundle {bundle_path})", file=sys.stderr)
+    summaries = []
     with tempfile.TemporaryDirectory(prefix="ghostflow-variant-") as tmp:
         variant_dir = build_variant(args.variant, Path(tmp) / "portal")
         try:
             server = SwitchableStaticServer(PORTAL_DIR, port=args.port)
         except OSError as exc:
+            bundle.state = "interrupted"
+            save()
             print(f"No se pudo abrir el puerto {args.port} ({exc}). Detén `make portal` u otro servidor.", file=sys.stderr)
             return 2
         try:
-            plan = [
-                ("A", "A · portal original, sin self-healing", PORTAL_DIR, False),
-                ("B", f"B · variante {args.variant}, sin self-healing", variant_dir, False),
-                ("C", f"C · variante {args.variant}, self-healing con {args.provider}", variant_dir, True),
-            ]
-            for key, name, root, healing in plan:
-                if key not in wanted:
-                    continue
-                server.switch(root)
-                print(f"\n=== {name} ===", file=sys.stderr)
-                result = adapter(healing).execute(workflow, {"contrasena": password})
-                evidence["scenarios"].append(_summary(name, result))
+            for (key, title, portal, healing), scenario in zip(plan, bundle.scenarios, strict=True):
+                server.switch(PORTAL_DIR if portal == "original" else variant_dir)
+                print(f"\n=== {title} ===", file=sys.stderr)
+                scenario.state, scenario.started_at = "running", datetime.now(UTC)
+                save()
+
+                def observe(event: str, payload: dict, scenario=scenario) -> None:
+                    with lock:
+                        apply_event(scenario, event, payload)
+                    save()
+
+                result = adapter(healing).execute(workflow, values, observer=observe)
+                finish_scenario(scenario, result)
+                save()
+                summaries.append(_summary(title, result))
         finally:
             server.close()
-            if isinstance(provider, MetaModelProvider):
-                evidence["meta_requests_sent"] = provider.requests_sent
-                evidence["meta_usage"] = provider.usage_totals
+            bundle.workflow.sha256_after = workflow_digest(workflow)
+            bundle.state = "finished" if all(s.state == "finished" for s in bundle.scenarios) else "interrupted"
+            save()
+            if is_meta:
                 provider.close()
 
-    evidence["workflow_sha256_after"] = workflow_digest(workflow)
-    evidence["workflow_unchanged"] = evidence["workflow_sha256_after"] == digest_before
-    text = json.dumps(evidence, ensure_ascii=False, indent=2)
-    print(text)
     if args.out:
-        args.out.write_text(text + "\n", encoding="utf-8")
+        legacy = {
+            "workflow": workflow.name,
+            "workflow_sha256_before": digest_before,
+            "scenarios": summaries,
+            "workflow_sha256_after": bundle.workflow.sha256_after,
+            "workflow_unchanged": bundle.workflow.sha256_after == digest_before,
+        }
+        if is_meta:
+            legacy["meta_requests_sent"] = bundle.ai.requests_sent
+            legacy["meta_usage"] = bundle.ai.usage.model_dump() if bundle.ai.usage else None
+        args.out.write_text(json.dumps(legacy, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
-    for s in evidence["scenarios"]:
-        print(f"{s['scenario']}: {s['status']}" + (f" (falló {s['failed_step']})" if s["failed_step"] else ""), file=sys.stderr)
+    for s in bundle.scenarios:
+        print(f"{s.title}: {s.status}" + (f" (failed at {next(x.id for x in s.steps if x.state == 'failed')})" if s.status == "failed" else ""), file=sys.stderr)
+    print(f"Meta requests sent: {bundle.ai.requests_sent}. DSL unchanged: {bundle.workflow.unchanged}. Bundle: {bundle_path}", file=sys.stderr)
     return 0
 
 
