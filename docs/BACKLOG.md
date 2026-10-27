@@ -17,6 +17,14 @@ Mejoras identificadas durante GF-001 y dejadas fuera de alcance a propósito.
 - Evaluar Responses API (razonamiento entre turnos), prompt caching (`prompt_cache_key`) y `safety_identifier` cuando haya usuarios.
 - Mostrar la interpretación en la extensión o en la consola Angular.
 
+## Self-healing (GF-003)
+- Proponer al usuario promover una recuperación exitosa a localizador grabado (con aprobación humana; hoy no hay aprendizaje persistente).
+- Candidatos dentro de iframes del mismo origen y shadow DOM abierto.
+- Recuperación de verificaciones `element_text` (hoy solo pasos de acción).
+- Captura de pantalla redactada del momento de la recuperación como evidencia adicional.
+- Exponer el estado del self-healing en un endpoint de configuración (no se agregó a `/api/health` para mantener su contrato de GF-002).
+- Panel de auditoría de recuperaciones por workflow (consola Angular).
+
 ## Captura y ejecución
 - Navegación SPA (`history.pushState`, `hashchange`).
 - iframes del mismo origen, shadow DOM, carga de archivos, teclas adicionales, doble clic, hover.

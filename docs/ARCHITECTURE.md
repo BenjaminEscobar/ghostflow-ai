@@ -1,4 +1,4 @@
-# Arquitectura — GF-001 / GF-002
+# Arquitectura — GF-001 / GF-002 / GF-003
 
 ## Principios
 
@@ -15,11 +15,11 @@
 | `dsl` | Workflow DSL v0.1, plantillas `{{inputs.x}}`, JSON Schema | `security` |
 | `recording` | Eventos de la extensión, saneamiento, compilador determinista | `dsl`, `security` |
 | `ai` | `ModelProvider` (mock / Meta Muse Spark), tarea de interpretación, CLI de comparación | `dsl`, `recording` (modelos), `security` |
-| `execution` | `ExecutionAdapter` + adaptador `web` (Playwright) | `dsl`, `security` |
+| `execution` | `ExecutionAdapter` + adaptador `web` (Playwright), self-healing (`recovery.py`) | `dsl`, `security` |
 | `storage` | Tablas `recordings`, `workflows`, `runs` (documentos JSON) | — |
 | `api` | Endpoints y composición (`create_app`) | todos |
 
-`ai` y `execution` no se conocen entre sí: la IA nunca toca el motor.
+`execution` no importa `ai`: define el contrato `RecoveryAdvisor` (datos de entrada y salida) y `ai/recovery.py` lo implementa sobre cualquier `ModelProvider`. La API los conecta. La IA nunca toca el motor ni el navegador.
 
 ## Workflow DSL v0.1
 
@@ -93,3 +93,28 @@ Grabación saneada ──► compilador ──► Workflow (autoridad) ───
 - **Lo que el modelo no puede tocar:** acciones, objetivos y estrategias, valores/plantillas, URLs, `allowed_origins`, inputs (nombres, `sensitive`, `default`) y verificaciones. `apply_annotation` lo garantiza comparando `execution_view` antes y después.
 - **Fallos:** cualquier error (HTTP, timeout, truncado, contrato, tope de peticiones) se convierte en `ModelProviderError`; la API guarda el workflow determinista y devuelve `ai_error`.
 - **Proveedor elegible:** `GHOSTFLOW_AI_PROVIDER=mock|meta`. Las pruebas inyectan `httpx.MockTransport`; ninguna prueba sale a la red.
+
+## Self-healing semántico (GF-003)
+
+```
+PlaywrightWebAdapter._run_step
+  └─ _resolve(target) ── 0 coincidencias en todas las estrategias ──► ElementNotFound(tried, ambiguous)
+        └─ Healer.attempt  (execution/recovery.py — autoridad)
+             1. elegibilidad: habilitado, acción click/fill/select/check, no ambiguo, sin input sensible,
+                presupuesto por ejecución
+             2. PlaywrightCandidateSource.collect: COLLECT_JS/DESCRIBE_JS (constantes; sin valores ni
+                campos password; ≤ max_candidates) → Candidate(c1..cN) + ElementHandle internos
+             3. filtro por compatibilidad de acción y política de efectos secundarios
+             4. RecoveryAdvisor.propose  (ai/recovery.py → ModelProvider: Meta o mock)
+                  payload: intención, localizadores fallidos, ruta esperada, candidatos públicos
+                  respuesta: RecoveryProposal {candidate_id, confidence, justification, rejection_reason}
+             5. validación determinista (cada regla queda en `validation[]`)
+             6. re-verificación en vivo del ElementHandle → una sola acción
+        └─ StepResult.resolution = "ai_recovery", recovery = RecoveryAttempt (auditoría)
+```
+
+- **Separación:** el ejecutor nunca recibe del modelo nada ejecutable: solo un id que él mismo emitió. Los scripts de inspección son constantes del código fuente (`COLLECT_JS`, `DESCRIBE_JS`, `LIVE_JS`, `SUBMITS_JS`) y solo reciben un número.
+- **Destino esperado:** si el paso siguiente es `wait_for_url`, un enlace recuperado debe llevar exactamente a esa ruta. Es la evidencia determinista más fuerte de equivalencia y bloquea elecciones manipuladas por la página.
+- **Duplicados:** el adaptador recuerda si un clic o Enter fue de tipo envío (`SUBMITS_JS`) y lo da por confirmado solo cuando un `wait_for_url`/`navigate` posterior pasa. Mientras no esté confirmado, ningún control con efectos secundarios se recupera.
+- **Compatibilidad:** `healed` conserva su significado de GF-001 (localizador grabado alternativo); `resolution` y `recovery` son campos nuevos opcionales del resultado JSON (sin migraciones).
+- **Proveedor offline:** el mock solo recupera cuando hay un único enlace a la ruta esperada y lo declara como `provider: "mock"`; la evidencia nunca se atribuye a Meta si no hubo llamada real.

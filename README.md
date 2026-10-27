@@ -22,7 +22,7 @@ GhostFlow aprende procesos empresariales observando a una persona trabajar en un
 1. La **extensión** graba acciones solo en dominios autorizados. Nunca envía valores de contraseñas ni campos sensibles.
 2. El **backend** vuelve a aplicar las reglas (allowlist y redacción), guarda la grabación y la **compila** a un workflow del DSL: los valores tecleados se vuelven *inputs* parametrizables; las contraseñas se vuelven *inputs sensibles* que se piden al ejecutar y nunca se guardan.
 3. La **IA** (Meta Model API con `muse-spark-1.3`, o un mock offline) **interpreta** el proceso: propósito de negocio, resultado esperado, precondiciones, descripción y relevancia de cada paso, y qué es cada input (tipo, si es parámetro, constante o credencial). Recibe una vista semántica sin valores y solo puede escribir documentación: no puede cambiar acciones, URLs, inputs ni verificaciones (ver [Interpretación con Meta](#interpretación-con-meta-gf-002)).
-4. El **motor Playwright** ejecuta el workflow: cada elemento tiene varias estrategias de localización en orden de prioridad (test id → rol+nombre → etiqueta → placeholder → id → name → texto → ruta CSS). Si la primera falla, usa la siguiente y lo marca como `healed`.
+4. El **motor Playwright** ejecuta el workflow: cada elemento tiene varias estrategias de localización en orden de prioridad (test id → rol+nombre → etiqueta → placeholder → id → name → texto → ruta CSS). Si la primera falla, usa la siguiente (`resolution: "deterministic_fallback"`, `healed: true`). Si **todas** fallan y el self-healing está activado, Muse Spark elige uno de los candidatos reales de la página y GhostFlow lo valida antes de actuar (`resolution: "ai_recovery"`, ver [Self-healing](#self-healing-semántico-con-meta-gf-003)).
 5. Al final **verifica** el resultado (texto de estado visible y ruta final) y bloquea cualquier petición del navegador fuera de la allowlist.
 
 ## Estructura
@@ -114,6 +114,47 @@ cd backend
 
 Siempre ejecuta el mock; si `GHOSTFLOW_AI_PROVIDER=meta` y hay clave, envía **exactamente una** petición a Meta (sin reintentos) y muestra ambas interpretaciones lado a lado, con tokens usados y costo estimado (precios Standard de `muse-spark-1.3`: USD 1,25 / 4,25 por millón de tokens de entrada / salida). También acepta una grabación real exportada desde `GET /api/recordings/{id}`. La diferencia esperada: el mock repite la interfaz (*"Completar textbox \"Nombre del cliente\""*, sin precondiciones, todo `supporting`), mientras que Muse Spark explica el propósito de negocio, marca los pasos críticos (autenticación, envío), clasifica inputs (`person_name`, `email`, parámetro vs constante) y deja notas de revisión (p. ej. la prioridad fija en la grabación).
 
+## Self-healing semántico con Meta (GF-003)
+
+Cuando **todos** los localizadores grabados de un paso no encuentran nada, GhostFlow puede pedir a Muse Spark que identifique el elemento equivalente en la página actual. Está **desactivado por defecto** (`GHOSTFLOW_HEALING_ENABLED=false`).
+
+```
+localizadores grabados → 0 coincidencias ─► ¿elegible? ─► candidatos de la página (script fijo, ≤40, sin valores)
+   ─► Muse Spark elige un id ─► validación determinista ─► re-verificación en vivo ─► una sola acción
+```
+
+- **Cuándo se activa:** solo `click`, `fill`, `select` y `check`, solo si ningún localizador encontró elementos (si hay varios, es ambigüedad y se falla), nunca para inputs sensibles (credenciales), como máximo una vez por paso y `GHOSTFLOW_HEALING_MAX_ATTEMPTS_PER_RUN` por ejecución. Los errores que no son de localización (timeouts de navegación, verificaciones) nunca activan IA.
+- **Qué ve el modelo:** intención del paso y del workflow, el elemento esperado, los localizadores que fallaron, la ruta que el workflow espera a continuación y una lista numerada de candidatos (`c1`, `c2`…) con tipo, rol, nombre visible, región, encabezado, estado habilitado y ruta del enlace. Nunca valores de formularios, contraseñas (los campos `password` ni se listan), cookies, URLs completas ni query strings. Los textos de la página se tratan como datos no confiables y pasan por `scrub_text`.
+- **Qué puede responder:** `candidate_id` (vacío si no hay equivalente), `confidence` (`high`/`medium`/`low`/`none`), `justification` y `rejection_reason`. No existe ningún campo para selectores, XPath, scripts ni URLs; los campos extra se rechazan.
+- **Validación determinista (autoridad final):** el id existe; confianza ≥ `GHOSTFLOW_HEALING_MIN_CONFIDENCE` (`high` por defecto); tipo de elemento compatible con la acción; mismo rol ARIA que el grabado; visible y habilitado; no hay otro candidato indistinguible; si es un enlace: destino dentro de `allowed_origins`, sin nueva pestaña ni descarga, y **la misma ruta que el workflow espera a continuación**; política de efectos secundarios; y re-verificación en vivo (sigue conectado, visible, habilitado y con el mismo destino).
+- **Efectos secundarios:** botones, envíos y controles desconocidos no se recuperan (ni siquiera se ofrecen al modelo) salvo `GHOSTFLOW_HEALING_ALLOW_SIDE_EFFECTS=true`, y aun así nunca después de un envío anterior cuyo resultado no confirmó una navegación posterior (sin duplicar operaciones).
+- **El DSL no cambia:** la recuperación solo vale para esa ejecución; el workflow guardado no se modifica (no hay aprendizaje automático de selectores).
+- **Costo:** usa el mismo proveedor que GF-002, con el mismo tope de peticiones (`GHOSTFLOW_META_MAX_REQUESTS`, contando reintentos), timeout y límite de tokens. Con la variante demo, una recuperación envía ~1 K tokens.
+
+**Evidencia en cada ejecución** (`result.steps[*]`, compatible con GF-001/002):
+
+| Campo | Significado |
+|---|---|
+| `resolution` | `primary`, `deterministic_fallback` (otro localizador grabado) o `ai_recovery` |
+| `healed` | Igual que en GF-001: se usó un localizador grabado alternativo. **Nunca** indica recuperación por IA |
+| `recovery` | Intento de self-healing: `exhausted_strategies`, `consulted_model`, `provider`, `model`, `latency_ms`, tokens, `candidates_considered`, `proposed` (id, tipo, rol, nombre, ruta), `confidence`, `justification`, `validation[]` (cada regla con `passed`), `outcome` (`recovered`/`rejected`/`skipped`/`error`) y `reason` |
+
+Los logs `ghostflow.healing` registran paso, resultado, proveedor, modelo, id del candidato, confianza, latencia y tokens (sin nombres de la página, valores ni la clave).
+
+### Demostración A / B / C
+
+La variante `demo-portal/variants/crear-requerimiento/` cambia **Nueva solicitud** por **Crear requerimiento** (otro test id, id, texto y estructura HTML; mismo destino). Los cuatro localizadores grabados de ese paso fallan.
+
+```bash
+# Detén `make portal` si está corriendo: la demo usa http://localhost:8080 (origen de la grabación).
+make demo-healing        # A, B y C con el mock offline (0 solicitudes a Meta)
+make demo-healing-meta   # A y B igual; C consulta a Muse Spark (máximo 1 solicitud)
+```
+
+Ambas compilan **una vez** `docs/examples/demo-recording.json` y ejecutan el mismo workflow (su SHA-256 se imprime antes y después): **A** pasa con los localizadores grabados; **B** falla en `s6` con `recovery.outcome: "skipped"`; **C** recupera `s6` con `resolution: "ai_recovery"` y completa las verificaciones. Opciones: `--headed --delay-ms 800` para filmarla, `--only C`.
+
+Con la extensión y la API: graba y compila contra `make portal`; luego detén el portal y ejecuta `make portal-variant` (mismo origen); reinicia el backend con `GHOSTFLOW_HEALING_ENABLED=true` (y `GHOSTFLOW_AI_PROVIDER=meta` para Muse Spark) y vuelve a lanzar `POST /api/workflows/{id}/runs`.
+
 ## Stack completo con Docker
 
 ```bash
@@ -155,6 +196,12 @@ Variables `GHOSTFLOW_*` (ver `backend/ghostflow/config.py`):
 | `GHOSTFLOW_META_MAX_RETRIES` | `1` | Solo 429/500/503 |
 | `GHOSTFLOW_META_MAX_REQUESTS` | `50` | Tope duro por proceso del backend |
 | `GHOSTFLOW_META_ALLOW_CONTRIBUTOR_MODE` | `false` | `true` solo con autorización explícita |
+| `GHOSTFLOW_HEALING_ENABLED` | `false` | Self-healing semántico (GF-003) |
+| `GHOSTFLOW_HEALING_MIN_CONFIDENCE` | `high` | `high` o `medium` |
+| `GHOSTFLOW_HEALING_ALLOW_SIDE_EFFECTS` | `false` | Permite recuperar botones/envíos (nunca tras un envío no confirmado) |
+| `GHOSTFLOW_HEALING_MAX_CANDIDATES` | `40` | Candidatos extraídos por intento (5–100) |
+| `GHOSTFLOW_HEALING_MAX_ATTEMPTS_PER_RUN` | `2` | Intentos por ejecución (uno por paso como máximo) |
+| `GHOSTFLOW_STEP_DELAY_MS` | `0` | Pausa visual entre pasos para demos |
 | `GHOSTFLOW_STEP_TIMEOUT_MS` | `10000` | Tiempo máximo por paso |
 | `GHOSTFLOW_BROWSER_HEADLESS` | `true` | `false` para ver la reproducción |
 | `GHOSTFLOW_MAX_CONCURRENT_RUNS` | `2` | Límite de ejecuciones simultáneas |
@@ -167,6 +214,8 @@ Para autorizar otro dominio hay que cambiarlo en tres lugares, a propósito: `GH
 - **IA separada del motor:** el modelo solo devuelve documentación validada contra un esquema cerrado; el documento resultante se vuelve a validar completo y su parte ejecutable debe ser idéntica a la del compilador. El modelo no recibe valores de inputs y el contenido de las páginas se le entrega como dato no confiable.
 - **Dominios autorizados:** allowlist por origen exacto (esquema, host y puerto) aplicada en la extensión, al recibir grabaciones, al guardar workflows y en **cada petición** del navegador de ejecución (`context.route`). Los endpoints de metadatos cloud (`169.254.169.254`, etc.) y las IP link-local se bloquean siempre.
 - **Sin secretos registrados:** campos `password`, `autocomplete` sensibles, nombres como *token/contraseña/api key/tarjeta* y valores con forma de JWT o token se registran sin valor, en la extensión y otra vez en el servidor. Los inputs sensibles no admiten valor por defecto, se piden en cada ejecución, se guardan como `***` y se eliminan de los mensajes de error.
+- **Self-healing acotado:** el modelo solo elige un id entre candidatos extraídos por un script fijo de GhostFlow; el ejecutor valida origen, destino, rol, unicidad, visibilidad y efectos secundarios antes de actuar una sola vez. Nunca redirige credenciales ni repite un envío incierto.
+- **Pruebas sin red:** `tests/conftest.py` ignora `.env`/`GHOSTFLOW_*` y bloquea cualquier petición httpx real, así que la suite nunca consume Meta aunque exista una clave local.
 - **Sin credenciales en Git:** `.env` está ignorado; el único "secreto" del repo es la contraseña ficticia del portal demo, visible en su propia pantalla de ingreso.
 
 ## Limitaciones conocidas
@@ -178,6 +227,7 @@ Para autorizar otro dominio hay que cambiarlo en tres lugares, a propósito: `GH
 - Las ejecuciones son síncronas dentro de la petición HTTP (sin cola).
 - Sin autenticación en la API: pensada para uso local. No exponer públicamente.
 - Las tablas se crean al iniciar; no hay migraciones (Alembic en backlog).
+- Self-healing: solo marco principal (sin iframes ni shadow DOM), solo elementos visibles e interactivos estándar, y sin aprendizaje persistente; un rediseño que cambie el destino de un enlace no se recupera (la regla de destino esperado lo impide a propósito).
 - La validación contra la API real de Meta depende de una clave configurada por el propietario (ver informe de GF-002).
 - La interpretación con Meta es una sola llamada síncrona dentro de la compilación (hasta el timeout); no hay re-interpretación de workflows existentes.
 - El costo por llamada es una estimación local a partir de `usage`; la facturación de Meta es la referencia.
