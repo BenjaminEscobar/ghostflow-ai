@@ -1,0 +1,226 @@
+{
+  "name": "Registrar solicitud de cliente",
+  "source": "fixture",
+  "extension_version": "0.1.0",
+  "events": [
+    {
+      "seq": 0,
+      "ts": 1790000000000,
+      "type": "navigation",
+      "url": "http://localhost:8080/index.html",
+      "title": "Ingreso · Portal Andina Servicios (demo)"
+    },
+    {
+      "seq": 1,
+      "ts": 1790000002000,
+      "type": "input",
+      "url": "http://localhost:8080/index.html",
+      "value": "demo",
+      "target": {
+        "tag": "input",
+        "role": "textbox",
+        "accessible_name": "Usuario",
+        "label": "Usuario",
+        "test_id": "login-username",
+        "element_id": "username",
+        "name_attr": "username",
+        "input_type": "text",
+        "autocomplete": "username",
+        "css": "#username"
+      }
+    },
+    {
+      "seq": 2,
+      "ts": 1790000003500,
+      "type": "input",
+      "url": "http://localhost:8080/index.html",
+      "value": null,
+      "sensitive": true,
+      "target": {
+        "tag": "input",
+        "label": "Contraseña",
+        "accessible_name": "Contraseña",
+        "test_id": "login-password",
+        "element_id": "password",
+        "name_attr": "password",
+        "input_type": "password",
+        "autocomplete": "current-password",
+        "css": "#password"
+      }
+    },
+    {
+      "seq": 3,
+      "ts": 1790000003510,
+      "type": "click",
+      "url": "http://localhost:8080/index.html",
+      "target": {
+        "tag": "button",
+        "role": "button",
+        "accessible_name": "Ingresar",
+        "test_id": "login-submit",
+        "text": "Ingresar",
+        "css": "#login-form > button:nth-of-type(1)"
+      }
+    },
+    {
+      "seq": 4,
+      "ts": 1790000003910,
+      "type": "navigation",
+      "url": "http://localhost:8080/dashboard.html",
+      "title": "Panel · Portal Andina Servicios (demo)"
+    },
+    {
+      "seq": 5,
+      "ts": 1790000005410,
+      "type": "click",
+      "url": "http://localhost:8080/dashboard.html",
+      "target": {
+        "tag": "a",
+        "role": "link",
+        "accessible_name": "Nueva solicitud",
+        "test_id": "nav-new-request",
+        "text": "Nueva solicitud",
+        "css": "body > main:nth-of-type(1) > nav:nth-of-type(1) > a:nth-of-type(1)"
+      }
+    },
+    {
+      "seq": 6,
+      "ts": 1790000005710,
+      "type": "navigation",
+      "url": "http://localhost:8080/new-request.html",
+      "title": "Nueva solicitud · Portal Andina Servicios (demo)"
+    },
+    {
+      "seq": 7,
+      "ts": 1790000008710,
+      "type": "input",
+      "url": "http://localhost:8080/new-request.html",
+      "value": "Ana Torres",
+      "target": {
+        "tag": "input",
+        "role": "textbox",
+        "accessible_name": "Nombre del cliente",
+        "label": "Nombre del cliente",
+        "test_id": "customer-name",
+        "element_id": "customer-name",
+        "name_attr": "customer_name",
+        "input_type": "text",
+        "css": "#customer-name"
+      }
+    },
+    {
+      "seq": 8,
+      "ts": 1790000011710,
+      "type": "input",
+      "url": "http://localhost:8080/new-request.html",
+      "value": "ana.torres@ejemplo.test",
+      "target": {
+        "tag": "input",
+        "role": "textbox",
+        "accessible_name": "Correo del cliente",
+        "label": "Correo del cliente",
+        "element_id": "customer-email",
+        "name_attr": "customer_email",
+        "placeholder": "cliente@ejemplo.test",
+        "input_type": "email",
+        "css": "#customer-email"
+      }
+    },
+    {
+      "seq": 9,
+      "ts": 1790000013210,
+      "type": "select",
+      "url": "http://localhost:8080/new-request.html",
+      "value": "facturacion",
+      "target": {
+        "tag": "select",
+        "role": "combobox",
+        "accessible_name": "Categoría",
+        "label": "Categoría",
+        "test_id": "category",
+        "element_id": "category",
+        "name_attr": "category",
+        "css": "#category"
+      }
+    },
+    {
+      "seq": 10,
+      "ts": 1790000014210,
+      "type": "check",
+      "url": "http://localhost:8080/new-request.html",
+      "checked": true,
+      "target": {
+        "tag": "input",
+        "role": "radio",
+        "accessible_name": "Alta",
+        "label": "Alta",
+        "name_attr": "priority",
+        "input_type": "radio",
+        "value_attr": "alta",
+        "css": "#request-form > fieldset:nth-of-type(1) > label:nth-of-type(3) > input:nth-of-type(1)"
+      }
+    },
+    {
+      "seq": 11,
+      "ts": 1790000018210,
+      "type": "input",
+      "url": "http://localhost:8080/new-request.html",
+      "value": "Factura duplicada del mes de octubre",
+      "target": {
+        "tag": "textarea",
+        "role": "textbox",
+        "accessible_name": "Descripción",
+        "label": "Descripción",
+        "element_id": "description",
+        "name_attr": "description",
+        "css": "#description"
+      }
+    },
+    {
+      "seq": 12,
+      "ts": 1790000019210,
+      "type": "check",
+      "url": "http://localhost:8080/new-request.html",
+      "checked": true,
+      "target": {
+        "tag": "input",
+        "role": "checkbox",
+        "accessible_name": "Notificar al cliente por correo",
+        "label": "Notificar al cliente por correo",
+        "element_id": "notify",
+        "name_attr": "notify",
+        "input_type": "checkbox",
+        "css": "#notify"
+      }
+    },
+    {
+      "seq": 13,
+      "ts": 1790000020710,
+      "type": "click",
+      "url": "http://localhost:8080/new-request.html",
+      "target": {
+        "tag": "button",
+        "role": "button",
+        "accessible_name": "Crear solicitud",
+        "test_id": "submit-request",
+        "element_id": "submit-request",
+        "text": "Crear solicitud",
+        "css": "#submit-request"
+      }
+    },
+    {
+      "seq": 14,
+      "ts": 1790000021010,
+      "type": "navigation",
+      "url": "http://localhost:8080/confirmation.html?ref=REQ-1001",
+      "title": "Confirmación · Portal Andina Servicios (demo)"
+    },
+    {
+      "seq": 15,
+      "ts": 1790000021410,
+      "type": "observation",
+      "url": "http://localhost:8080/confirmation.html?ref=REQ-1001",
+      "text": "Solicitud registrada correctamente"
+    }
+  ]
+}
