@@ -441,3 +441,94 @@ def test_key_is_never_part_of_a_bundle(tmp_path, workflow):
     write_bundle(tmp_path / "k.json", b)
     assert key not in (tmp_path / "k.json").read_text(encoding="utf-8")
     assert json.loads((tmp_path / "k.json").read_text(encoding="utf-8"))["ai"]["provider"] == "meta"
+
+
+# -- GF-005: design system and accessibility of the console --------------------------------------
+
+
+def _css_vars(css: str) -> dict[str, str]:
+    root = css[css.index(":root {") : css.index("}", css.index(":root {"))]
+    return dict(re.findall(r"--([\w-]+):\s*(#[0-9a-fA-F]{6})", root))
+
+
+def _luminance(hex_color: str) -> float:
+    def channel(c: int) -> float:
+        c = c / 255
+        return c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4
+
+    r, g, b = (int(hex_color[i : i + 2], 16) for i in (1, 3, 5))
+    return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b)
+
+
+def _contrast(a: str, b: str) -> float:
+    hi, lo = sorted((_luminance(a), _luminance(b)), reverse=True)
+    return (hi + 0.05) / (lo + 0.05)
+
+
+def test_palette_is_light_blue_led_and_text_meets_wcag_aa():
+    css = (STATIC_DIR / "console.css").read_text(encoding="utf-8")
+    v = _css_vars(css)
+    assert v["blue"].lower() == "#1877f2" and _luminance(v["bg"]) > 0.9 and _luminance(v["surface"]) == 1.0
+    pairs = [
+        ("text", "surface"), ("muted", "surface"), ("muted", "surface-2"), ("blue-ink", "surface"), ("blue-ink", "blue-soft"),
+        ("violet-ink", "surface"), ("violet-ink", "violet-soft"), ("ok-ink", "ok-soft"), ("fail-ink", "fail-soft"),
+        ("warn-ink", "warn-soft"), ("text", "bg"),
+    ]
+    for fg, bg in pairs:
+        assert _contrast(v[fg], v[bg]) >= 4.5, (fg, bg, round(_contrast(v[fg], v[bg]), 2))
+    assert _contrast("#ffffff", v["blue"]) >= 4.0  # white on the blue buttons and "Real" badge (bold/large)
+    assert "prefers-reduced-motion" in css and ":focus-visible" in css
+    assert "@media (max-width: 1080px)" in css and "@media (max-width: 760px)" in css  # tablet, narrow
+
+
+def test_views_follow_the_tabs_pattern_and_controls_are_labelled():
+    html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
+    js = (STATIC_DIR / "console.js").read_text(encoding="utf-8")
+    assert '<html lang="en">' in html and 'class="skip" href="#app"' in html
+    assert 'role="tablist" aria-label="View"' in html
+    assert 'id="tab-demo" aria-controls="demo-view" aria-selected="true"' in html
+    assert 'id="tab-dev" aria-controls="dev-view" aria-selected="false"' in html
+    assert 'id="dev-view" role="tabpanel" aria-labelledby="tab-dev" hidden' in html
+    assert '<label class="sr-only" for="source-select">' in html
+    assert all('type="button"' in tag for tag in re.findall(r"<button[^>]*>", html))
+    calls = re.findall(r'el\("button", \{\s*([^}]*)', js)
+    assert calls and all(c.startswith('type: "button"') for c in calls)
+    assert "ArrowRight" in js and "aria-current" in js
+
+
+def test_mascot_is_an_original_inline_svg_with_an_accessible_name():
+    html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
+    js = (STATIC_DIR / "console.js").read_text(encoding="utf-8")
+    svg = html[html.index('<svg class="mascot"') : html.index("</svg>", html.index('<svg class="mascot"'))]
+    assert 'role="img" aria-labelledby="mascot-title"' in svg and '<title id="mascot-title">' in svg
+    for mood in ["eyes-open", "eyes-happy", "mouth-smile", "mouth-o", "mouth-worried", "sparkles"]:
+        assert f'class="{mood}"' in svg
+    assert "<img" not in html and "<image" not in svg  # no bitmap or third-party artwork
+    for brand in ["facebook", "meta-logo", "instagram", "whatsapp", "infinity"]:
+        assert brand not in html.lower() and brand not in js.lower()
+    moods = set(re.findall(r'return "(idle|working|healing|alert|happy|proud)"', js)) | {"proud", "happy"}
+    css = (STATIC_DIR / "console.css").read_text(encoding="utf-8")
+    for mood in moods - {"idle"}:
+        assert f'data-mood="{mood}"' in css, mood
+
+
+def test_demo_view_never_presents_reconstruction_as_live_or_as_a_screenshot():
+    js = (STATIC_DIR / "console.js").read_text(encoding="utf-8")
+    assert "Reconstructed from saved evidence · not a screenshot" in js
+    assert "Live from the demo runner · the real browser is the Chromium window" in js
+    assert "REPLAY of saved evidence · not a live execution" in js
+    assert "when the workflow was compiled (GF-002)" in js and "separate execution with its own provenance" in js
+    assert re.search(r"Math\.random|Date\.now\(\)", js) is None  # no invented timings or values
+    # Current backend settings are never confused with the recorded results of the selected evidence.
+    assert "Current backend settings" in js and "Recorded recovery · selected evidence" in js
+    assert "independent of the interpretation (GF-002)" in js
+    # Presentation copy is English; Spanish on screen only ever comes from evidence data.
+    html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
+    assert not re.search(r"[áéíóúñÁÉÍÓÚÑ¿¡]", js + html)
+
+
+def test_step_locations_come_from_the_workflow(workflow):
+    view = outline_workflow(workflow, "test")
+    locations = {s.id: s.location for s in view.steps if s.location}
+    assert locations["s1"] == "http://localhost:8080/index.html" and locations["s7"] == "/new-request.html"
+    assert all(s.location is None for s in view.steps if s.action in {"click", "fill", "select", "check"})

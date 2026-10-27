@@ -169,3 +169,71 @@ def test_console_shows_recorded_and_live_evidence(tmp_path, console_url):
         finally:
             browser.close()
 
+
+
+# Visible text blocks rendered narrower than a few characters, i.e. text wrapping into a vertical column.
+SQUEEZED_TEXT_JS = """[...document.querySelectorAll('#app *')]
+  .filter((e) => e instanceof HTMLElement && e.offsetParent && !e.closest('.sr-only') && e.children.length === 0)
+  .filter((e) => e.textContent.trim().length > 12 && e.getBoundingClientRect().width < 48)
+  .map((e) => e.id || e.className || e.tagName)"""
+
+
+@pytest.mark.parametrize("width,height", [(1440, 900), (1024, 1366), (820, 1180)])
+def test_demo_and_developer_views_are_usable_on_desktop_and_tablet(console_url, width, height):
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch()
+        try:
+            page = browser.new_page(viewport={"width": width, "height": height}, reduced_motion="reduce")
+            problems = []
+            page.on("pageerror", lambda exc: problems.append(str(exc)))
+            page.goto(f"{console_url}/console/#recorded%2Fgf003-meta-recovery")
+
+            # Demo view first: one story, real data, honest labels.
+            expect(page.locator("#demo-view")).to_be_visible()
+            expect(page.locator("#dev-view")).to_be_hidden()
+            expect(page.locator("#capabilities")).to_contain_text("Recovered s6 in scenario C")
+            expect(page.locator("#stage-caption")).to_contain_text("not a screenshot")
+            expect(page.locator("#address")).to_have_text("http://localhost:8080/dashboard.html")
+            expect(page.locator("#action")).to_contain_text("Crear requerimiento")
+            expect(page.locator("#heal-summary")).to_contain_text("10/10 deterministic checks passed")
+            expect(page.locator("#heal-summary")).to_contain_text("Real · Meta muse-spark-1.3")
+            expect(page.locator("#understand")).to_contain_text("No AI interpretation stored")
+            expect(page.locator("#understand")).to_contain_text("independent of the interpretation (GF-002)")
+            expect(page.locator("#system-status")).to_contain_text("Current backend settings")
+            expect(page.locator("#heal-summary")).to_contain_text("Recorded recovery")
+            expect(page.locator("#mascot")).to_have_attribute("data-mood", "proud")
+            expect(page.locator("#page")).to_contain_text("Crear requerimiento")
+            expect(page.locator("#events")).to_contain_text("Recorded element not found")
+
+            # Layout: nothing squeezed into a sliver (no vertical text) and the mascot stays prominent.
+            assert page.evaluate(SQUEEZED_TEXT_JS) == []
+            assert page.locator("#mascot").bounding_box()["width"] >= 140
+
+            # Keyboard: arrows move between scenario tabs; the mascot reacts to the failure.
+            page.locator('.scenario[aria-selected="true"]').focus()
+            page.keyboard.press("Home")
+            expect(page.locator('.scenario[aria-selected="true"]')).to_contain_text("Scenario A")
+            page.keyboard.press("ArrowRight")
+            expect(page.locator('.scenario[aria-selected="true"]')).to_contain_text("Failed at s6")
+            expect(page.locator("#mascot")).to_have_attribute("data-mood", "alert")
+            expect(page.locator("#result-summary")).to_contain_text("Stopped safely")
+
+            # Clicking a step in the flow inspects it.
+            page.locator("#flow .node").first.click()
+            expect(page.locator("#action")).to_contain_text("Open page")
+
+            # No horizontal scrolling at this width.
+            assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth + 1")
+
+            # Developer view keeps the full audit; the view tabs work with the keyboard too.
+            page.locator("#tab-demo").focus()
+            page.keyboard.press("ArrowRight")
+            expect(page.locator("#tab-dev")).to_have_attribute("aria-selected", "true")
+            expect(page.locator("#dev-view")).to_be_visible()
+            expect(page.locator("#healing")).to_contain_text("Recorded locators exhausted (4)")
+            assert "view=developer" in page.url
+            assert page.evaluate(SQUEEZED_TEXT_JS) == []
+            assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth + 1")
+            assert problems == []
+        finally:
+            browser.close()
