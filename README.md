@@ -4,7 +4,7 @@ GhostFlow aprende procesos empresariales observando a una persona trabajar en un
 
 > Proyecto para el Meta Global AI Developer Hackathon 2026 — categoría Indie Developer, temática *Build for Your World*. Desarrollado desde cero a partir del 26 de octubre de 2026.
 
-## Cómo funciona (GF-001)
+## Cómo funciona
 
 ```
  Chrome Extension (MV3)          Backend FastAPI                          Navegador Playwright
@@ -15,13 +15,13 @@ GhostFlow aprende procesos empresariales observando a una persona trabajar en un
   mensajes de estado)             Compilador determinista ──► Workflow DSL (JSON, validado)
                                    │                              │
                                    ▼                              ▼
-                                  IA (mock / Meta Model API)     Adaptador "web" ──► Portal demo
-                                  solo anota metadatos           guardia de red      + verificación
+                                  IA (mock / Muse Spark)         Adaptador "web" ──► Portal demo
+                                  interpreta, no ejecuta         guardia de red      + verificación
 ```
 
 1. La **extensión** graba acciones solo en dominios autorizados. Nunca envía valores de contraseñas ni campos sensibles.
 2. El **backend** vuelve a aplicar las reglas (allowlist y redacción), guarda la grabación y la **compila** a un workflow del DSL: los valores tecleados se vuelven *inputs* parametrizables; las contraseñas se vuelven *inputs sensibles* que se piden al ejecutar y nunca se guardan.
-3. La **IA** (por ahora un mock; Meta Model API preparado) solo propone nombre, descripción y etiquetas. No puede cambiar acciones, URLs ni verificaciones.
+3. La **IA** (Meta Model API con `muse-spark-1.3`, o un mock offline) **interpreta** el proceso: propósito de negocio, resultado esperado, precondiciones, descripción y relevancia de cada paso, y qué es cada input (tipo, si es parámetro, constante o credencial). Recibe una vista semántica sin valores y solo puede escribir documentación: no puede cambiar acciones, URLs, inputs ni verificaciones (ver [Interpretación con Meta](#interpretación-con-meta-gf-002)).
 4. El **motor Playwright** ejecuta el workflow: cada elemento tiene varias estrategias de localización en orden de prioridad (test id → rol+nombre → etiqueta → placeholder → id → name → texto → ruta CSS). Si la primera falla, usa la siguiente y lo marca como `healed`.
 5. Al final **verifica** el resultado (texto de estado visible y ruta final) y bloquea cualquier petición del navegador fuera de la allowlist.
 
@@ -33,7 +33,7 @@ backend/            FastAPI + compilador + DSL + motor Playwright + pruebas
     api.py          Endpoints REST
     dsl/            Workflow DSL v0.1 (Pydantic) y exportación JSON Schema
     recording/      Modelo de eventos, saneamiento y compilador grabación → workflow
-    ai/             Contrato de proveedor, mock, adaptador Meta Model API, anotación
+    ai/             Contrato de proveedor, mock, proveedor Meta (Muse Spark), interpretación, CLI de comparación
     execution/      Contrato ExecutionAdapter + adaptador web (Playwright)
     security/       Allowlist de orígenes (anti-SSRF) y redacción de secretos
     storage.py      SQLAlchemy (PostgreSQL / SQLite)
@@ -42,7 +42,7 @@ extension/          Chrome Extension Manifest V3 (sin build)
 demo-portal/        Portal ficticio "Andina Servicios" (HTML/JS estático, datos sintéticos)
 schemas/            workflow.schema.json generado desde el DSL
 infra/              Configuración nginx del portal
-docs/               Arquitectura y backlog
+docs/               Arquitectura, backlog y grabación de ejemplo (docs/examples)
 ```
 
 ## Requisitos
@@ -86,6 +86,34 @@ curl -s -X POST localhost:8010/api/workflows/$WF/runs -H 'content-type: applicat
 
 La ejecución devuelve `status: "passed"`, el resultado de cada paso (estrategia usada, `healed`) y de cada verificación. Puedes cambiar los datos sin volver a grabar, por ejemplo `"inputs": {"contrasena": "ghostflow-demo", "nombre_del_cliente": "Luis Rojas"}`.
 
+## Interpretación con Meta (GF-002)
+
+Por defecto el backend usa el proveedor **mock** (offline, determinista, sin costos): toda la suite de pruebas corre así. Para usar **Meta Model API / Muse Spark**:
+
+```bash
+# backend/.env (ignorado por Git) o variables exportadas; la clave nunca va a la extensión
+GHOSTFLOW_AI_PROVIDER=meta
+GHOSTFLOW_META_API_KEY=<tu clave de https://dev.meta.ai>
+GHOSTFLOW_META_MAX_REQUESTS=5          # opcional: tope duro para una sesión de validación
+```
+
+Al compilar una grabación (`POST /api/recordings/{id}/workflow`) el backend envía **una** petición a `POST https://api.meta.ai/v1/chat/completions` con `response_format` JSON Schema estricto y guarda el resultado en `definition.interpretation` con su procedencia (`provider`, `model`, `generated_at`). `GET /api/health` muestra el proveedor y el modelo activos. Si Meta falla (error HTTP, timeout, salida inválida o tope alcanzado), el workflow se guarda igual, sin interpretación, y la respuesta trae `ai_error` con el motivo.
+
+**Qué ve el modelo** (`ai/annotate.py:annotation_payload`): nombre del proceso, host, rutas y títulos de página, cada paso (acción + descripción del elemento), los inputs con su etiqueta y la **forma** del valor (`email`, `date`, `text (1-3 words)`, `withheld`...), y las verificaciones. Nunca recibe valores tecleados, contraseñas, query strings ni cookies. Los textos de página pasan por `scrub_text` (enmascara correos, números largos y valores con forma de token).
+
+**Qué puede hacer el modelo:** solo rellenar campos de documentación de un esquema cerrado (`extra="forbid"`, longitudes y enums acotados). GhostFlow ignora ids de pasos o inputs desconocidos, limpia saltos de línea y `{{ }}`, vuelve a validar el workflow completo y **compara su parte ejecutable** (`execution_view`) con la del compilador: si cambiara algo, la respuesta se rechaza. El contenido de páginas y grabaciones viaja como dato en el mensaje `user`, nunca como instrucción de sistema.
+
+**Controles de costo y seguridad:** timeout (60 s), `max_completion_tokens` (4000, incluye razonamiento), `reasoning_effort=low`, reintentos solo para 429/500/503 (1 por defecto, backoff ≤ 5 s), tope de peticiones por proceso (`GHOSTFLOW_META_MAX_REQUESTS`, 50 por defecto), payload ≤ 60 000 caracteres y solo HTTPS. Los modelos `-contributor` (Meta puede entrenar con los datos) se rechazan salvo autorización explícita. Los logs `ghostflow.ai` registran proveedor, modelo, estado, latencia y tokens; nunca prompts, respuestas, cuerpos de error ni la clave.
+
+### Comparar mock vs Meta
+
+```bash
+cd backend
+.venv/bin/python -m ghostflow.ai.compare ../docs/examples/demo-recording.json --out ../gf002-evidence.json
+```
+
+Siempre ejecuta el mock; si `GHOSTFLOW_AI_PROVIDER=meta` y hay clave, envía **exactamente una** petición a Meta (sin reintentos) y muestra ambas interpretaciones lado a lado, con tokens usados y costo estimado (precios Standard de `muse-spark-1.3`: USD 1,25 / 4,25 por millón de tokens de entrada / salida). También acepta una grabación real exportada desde `GET /api/recordings/{id}`. La diferencia esperada: el mock repite la interfaz (*"Completar textbox \"Nombre del cliente\""*, sin precondiciones, todo `supporting`), mientras que Muse Spark explica el propósito de negocio, marca los pasos críticos (autenticación, envío), clasifica inputs (`person_name`, `email`, parámetro vs constante) y deja notas de revisión (p. ej. la prioridad fija en la grabación).
+
 ## Stack completo con Docker
 
 ```bash
@@ -118,6 +146,15 @@ Variables `GHOSTFLOW_*` (ver `backend/ghostflow/config.py`):
 | `GHOSTFLOW_DATABASE_URL` | `sqlite:///./ghostflow.db` | PostgreSQL en Compose |
 | `GHOSTFLOW_ALLOWED_ORIGINS` | `http://localhost:8080,http://127.0.0.1:8080` | Únicos orígenes grabables/ejecutables |
 | `GHOSTFLOW_AI_PROVIDER` | `mock` | `meta` requiere `GHOSTFLOW_META_API_KEY` |
+| `GHOSTFLOW_META_API_KEY` | — | Solo backend; nunca en Git ni en la extensión |
+| `GHOSTFLOW_META_API_BASE_URL` | `https://api.meta.ai/v1` | Solo HTTPS |
+| `GHOSTFLOW_META_MODEL` | `muse-spark-1.3` | Modo Standard (sin entrenamiento con los datos) |
+| `GHOSTFLOW_META_TIMEOUT_S` | `60` | Timeout por petición |
+| `GHOSTFLOW_META_MAX_OUTPUT_TOKENS` | `4000` | `max_completion_tokens` (razonamiento + salida) |
+| `GHOSTFLOW_META_REASONING_EFFORT` | `low` | `minimal`, `low`, `medium`, `high` |
+| `GHOSTFLOW_META_MAX_RETRIES` | `1` | Solo 429/500/503 |
+| `GHOSTFLOW_META_MAX_REQUESTS` | `50` | Tope duro por proceso del backend |
+| `GHOSTFLOW_META_ALLOW_CONTRIBUTOR_MODE` | `false` | `true` solo con autorización explícita |
 | `GHOSTFLOW_STEP_TIMEOUT_MS` | `10000` | Tiempo máximo por paso |
 | `GHOSTFLOW_BROWSER_HEADLESS` | `true` | `false` para ver la reproducción |
 | `GHOSTFLOW_MAX_CONCURRENT_RUNS` | `2` | Límite de ejecuciones simultáneas |
@@ -127,7 +164,7 @@ Para autorizar otro dominio hay que cambiarlo en tres lugares, a propósito: `GH
 ## Seguridad
 
 - **Sin código arbitrario:** el DSL es un conjunto cerrado de acciones (`navigate`, `click`, `fill`, `select`, `check`, `press`, `wait_for_url`) con `extra="forbid"`. No existe `evaluate`; los selectores CSS se fuerzan con prefijo `css=`; las plantillas solo admiten `{{inputs.nombre}}` y no se evalúan.
-- **IA separada del motor:** el modelo solo devuelve metadatos validados contra un esquema; el documento resultante se vuelve a validar completo. El modelo no recibe valores de inputs.
+- **IA separada del motor:** el modelo solo devuelve documentación validada contra un esquema cerrado; el documento resultante se vuelve a validar completo y su parte ejecutable debe ser idéntica a la del compilador. El modelo no recibe valores de inputs y el contenido de las páginas se le entrega como dato no confiable.
 - **Dominios autorizados:** allowlist por origen exacto (esquema, host y puerto) aplicada en la extensión, al recibir grabaciones, al guardar workflows y en **cada petición** del navegador de ejecución (`context.route`). Los endpoints de metadatos cloud (`169.254.169.254`, etc.) y las IP link-local se bloquean siempre.
 - **Sin secretos registrados:** campos `password`, `autocomplete` sensibles, nombres como *token/contraseña/api key/tarjeta* y valores con forma de JWT o token se registran sin valor, en la extensión y otra vez en el servidor. Los inputs sensibles no admiten valor por defecto, se piden en cada ejecución, se guardan como `***` y se eliminan de los mensajes de error.
 - **Sin credenciales en Git:** `.env` está ignorado; el único "secreto" del repo es la contraseña ficticia del portal demo, visible en su propia pantalla de ingreso.
@@ -141,7 +178,9 @@ Para autorizar otro dominio hay que cambiarlo en tres lugares, a propósito: `GH
 - Las ejecuciones son síncronas dentro de la petición HTTP (sin cola).
 - Sin autenticación en la API: pensada para uso local. No exponer públicamente.
 - Las tablas se crean al iniciar; no hay migraciones (Alembic en backlog).
-- El adaptador Meta Model API está probado solo contra respuestas simuladas; endpoint y modelo deben confirmarse antes de activarlo.
+- La validación contra la API real de Meta depende de una clave configurada por el propietario (ver informe de GF-002).
+- La interpretación con Meta es una sola llamada síncrona dentro de la compilación (hasta el timeout); no hay re-interpretación de workflows existentes.
+- El costo por llamada es una estimación local a partir de `usage`; la facturación de Meta es la referencia.
 - La allowlist es por nombre de host: no protege contra DNS rebinding de un dominio autorizado.
 
 Más detalles en [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) y mejoras pendientes en [`docs/BACKLOG.md`](docs/BACKLOG.md).

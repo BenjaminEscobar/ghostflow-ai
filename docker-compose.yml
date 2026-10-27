@@ -41,7 +41,10 @@ services:
     environment:
       GHOSTFLOW_DATABASE_URL: postgresql+psycopg://ghostflow:${POSTGRES_PASSWORD}@postgres:5432/ghostflow
       GHOSTFLOW_ALLOWED_ORIGINS: http://localhost:8080,http://127.0.0.1:8080
-      GHOSTFLOW_AI_PROVIDER: mock
+      GHOSTFLOW_AI_PROVIDER: ${GHOSTFLOW_AI_PROVIDER:-mock}
+      GHOSTFLOW_META_API_KEY: ${GHOSTFLOW_META_API_KEY:-}
+      GHOSTFLOW_META_MODEL: ${GHOSTFLOW_META_MODEL:-muse-spark-1.3}
+      GHOSTFLOW_META_MAX_REQUESTS: ${GHOSTFLOW_META_MAX_REQUESTS:-50}
     shm_size: "1gb"
 
 volumes:

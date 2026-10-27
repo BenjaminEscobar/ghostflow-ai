@@ -9,9 +9,13 @@ Mejoras identificadas durante GF-001 y dejadas fuera de alcance a propósito.
 - Edición del nombre de los inputs desde la extensión o la consola.
 
 ## IA (Meta Model API)
-- Validar endpoint, modelo y salida estructurada de la Llama API con una cuenta real y presupuesto aprobado.
-- Tareas nuevas: nombrar inputs semánticamente, proponer verificaciones adicionales, explicar fallos de ejecución, sugerir estrategias de localización alternativas tras un fallo (siempre como propuesta validada, nunca como código).
-- Registro de uso/costos por llamada y límites de presupuesto.
+- Tareas nuevas: proponer verificaciones adicionales, explicar fallos de ejecución, sugerir estrategias de localización alternativas tras un fallo (siempre como propuesta validada, nunca como código).
+- Renombrar inputs con nombres semánticos propuestos por el modelo (requiere reescribir plantillas de forma controlada y aprobación humana).
+- Promover a `sensitive` un input que el modelo marque como credencial, con aprobación humana (hoy solo genera una nota de revisión).
+- Re-interpretar un workflow existente (`POST /api/workflows/{id}/interpret`) y comparar versiones.
+- Persistir uso de tokens y costo por llamada (hoy solo en logs y en la CLI de comparación) y presupuesto acumulado entre reinicios.
+- Evaluar Responses API (razonamiento entre turnos), prompt caching (`prompt_cache_key`) y `safety_identifier` cuando haya usuarios.
+- Mostrar la interpretación en la extensión o en la consola Angular.
 
 ## Captura y ejecución
 - Navegación SPA (`history.pushState`, `hashchange`).
