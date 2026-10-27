@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>GhostFlow Recorder</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <h1>GhostFlow Recorder</h1>
+  <p id="state" class="state" data-state="idle" role="status">Cargando…</p>
+
+  <label for="name">Nombre de la grabación</label>
+  <input id="name" type="text" maxlength="120" placeholder="Ej.: Registrar solicitud de cliente">
+
+  <div class="row">
+    <button id="start" type="button">Iniciar grabación</button>
+    <button id="stop" type="button" class="danger">Detener y enviar</button>
+  </div>
+
+  <div id="upload" class="upload" aria-live="polite"></div>
+  <div class="row">
+    <button id="retry" type="button" class="secondary" hidden>Reintentar envío</button>
+    <button id="discard" type="button" class="secondary" hidden>Descartar</button>
+  </div>
+
+  <details>
+    <summary>Dominios autorizados</summary>
+    <ul id="origins"></ul>
+    <p class="muted">Backend: <code id="backend"></code></p>
+    <p class="muted">Las contraseñas y campos sensibles nunca se registran.</p>
+  </details>
+
+  <script src="popup.js"></script>
+</body>
+</html>
