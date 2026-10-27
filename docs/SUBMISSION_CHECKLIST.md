@@ -33,8 +33,8 @@ La página oficial decía que las *Official Rules* se publicarían antes del 26 
 
 ## 3. Verificación técnica antes de enviar
 
-- [ ] `make setup && make test`: 226 aprobadas.
-- [ ] `make test-e2e`: 13 aprobadas (Chromium en macOS).
+- [ ] `make setup && make test`: 231 aprobadas.
+- [ ] `make test-e2e`: 16 aprobadas (Chromium en macOS).
 - [ ] `git status` limpio; `git diff --check` sin errores.
 - [ ] `gitleaks git .` y `gitleaks dir .` sin hallazgos. `backend/.env` existe solo en local y está ignorado.
 - [ ] Desde un clon limpio en otra carpeta: `make setup`, `make test`, `make console` y `make demo-rehearsal` funcionan sin editar código.

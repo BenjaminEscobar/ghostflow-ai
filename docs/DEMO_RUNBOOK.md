@@ -20,8 +20,8 @@ No hace falta Docker, PostgreSQL, Redis ni ningún servicio externo: la demo usa
 git clone https://github.com/BenjaminEscobar/ghostflow-ai.git
 cd ghostflow-ai
 make setup           # venv, dependencias, Chromium de Playwright
-make test            # 226 pruebas offline (sin navegador, sin red)
-make test-e2e        # 13 pruebas con Chromium real (extensión, replay, self-healing, consola)
+make test            # 231 pruebas offline (sin navegador, sin red)
+make test-e2e        # 16 pruebas con Chromium real (extensión, replay, self-healing, consola)
 ```
 
 ### Credenciales
@@ -127,14 +127,33 @@ Por API (solo lectura): `GET /api/demo/sources`, `GET /api/demo/sources/{recorde
 ## 9. Pruebas
 
 ```bash
-make test        # 226 offline: incluye 28 de la consola (sanitización, real vs simulado, evidencias, API, CSP)
-make test-e2e    # 13 con Chromium: incluye 3 de GF-004 (modo visual, observador, consola en vivo y grabada)
+make test        # 231 offline: incluye 33 de la consola (sanitización, real vs simulado, evidencias, API, CSP, contraste AA, accesibilidad)
+make test-e2e    # 16 con Chromium: incluye 6 de la consola (modo visual, observador, en vivo y grabada, vistas Demo/Developer a 1440, 1024 y 820 px)
 git diff --check
 ```
 
 Las pruebas ignoran `backend/.env` y bloquean toda red externa. Solo se permiten los puertos loopback que abre cada prueba, así que nunca consumen Meta.
 
-## 10. Procedimiento para grabar el video final
+## 10. Comprobación visual de la consola en macOS (GF-005)
+
+1. `make console` y abre `http://127.0.0.1:8010/console/#recorded%2Fgf003-meta-recovery` en Chrome.
+2. **Vista Demo** (por defecto), de arriba abajo:
+   - **Barra superior:** marca GhostFlow AI, selector *Demo / Developer* y *Current backend settings* (*Online · Default AI · Self-healing*): la configuración actual del backend. Los resultados históricos llevan su propia etiqueta, por ejemplo *Recorded recovery · selected evidence* en el panel Self-Healing, de modo que *Self-healing off* arriba y una recuperación grabada abajo pueden ser correctos a la vez.
+   - **Barra lateral:** fuente de evidencia, con las insignias *Recorded / Saved / Live* y *Real / Simulated*, y los escenarios A/B/C. A 1024 y 820 px se convierte en una franja sobre el contenido.
+   - **Portada:** *Automation that adapts*, las tarjetas **Learns / Understands / Recovers** con datos de la evidencia, la mascota grande y la tarjeta *How it works* con **Replay evidence**.
+   - **Páginas del flujo:** *Home → Dashboard → New request → Confirmation*, derivadas de los pasos `navigate`/`wait_for_url`.
+   - **Tarjeta del escenario:** resultado, tiempo total (solo si la evidencia lo guarda), asesor de IA y DSL. A la izquierda, los pasos agrupados por página. A la derecha, el navegador **reconstruido** (dice *not a screenshot*) con los elementos que GhostFlow usó y los eventos (*Recorded element not found* → *… proposed an alternative*).
+   - **Panel Self-Healing with AI:** elemento original → alternativas (c1/c2/c3, *Selected*), asesor, confianza, *10/10 deterministic checks passed* y latencia.
+   - **Understand · Meta Intelligence:** a lo ancho, con la procedencia de la interpretación separada de la de la recuperación. Si el workflow no tiene interpretación, la insignia queda en *None* y una nota explica que la recuperación grabada (GF-003) es independiente de la interpretación (GF-002).
+3. Recorre los escenarios con el teclado: `Tab` hasta un escenario y luego las flechas, `Inicio` y `Fin`. La mascota cambia: orgullosa en C (recuperado), alerta en B (detenido de forma segura), feliz en A.
+4. Haz clic en una página del flujo o en un paso de la lista para inspeccionarlo. Vuelve a hacer clic para volver al paso clave.
+5. Pulsa **Replay evidence**: aparece la franja violeta *REPLAY of saved evidence · not a live execution*.
+6. Cambia a **Developer** (o abre `…/console/?view=developer#recorded%2Fgf003-meta-recovery`). Están las auditorías completas: localizadores agotados, candidatos, las 10 validaciones, tokens, latencia, proveedor y modelo, SHA-256 completo y procedencia. **Raw JSON** abre la evidencia tal como la sirve el backend.
+7. Ancho adaptable: con las DevTools (`⌥⌘I` → *Toggle device toolbar*) prueba 1440, 1024 y 820 px. No debe aparecer scroll horizontal ni texto comprimido en columnas estrechas (la E2E `test_demo_and_developer_views_are_usable_on_desktop_and_tablet` lo comprueba en esos tres anchos).
+8. Accesibilidad: en *Configuración del Sistema → Accesibilidad → Pantalla → Reducir movimiento* las animaciones se detienen. Con VoiceOver (`⌘F5`), la mascota se anuncia con su estado (p. ej. *GhostFlow mascot: recovered and completed*).
+9. Con una ejecución nueva (`make demo-rehearsal`), la consola cambia sola a *Live*, el pie del navegador dice *Live from the demo runner* y la insignia amarilla *Simulated AI* sigue visible.
+
+## 11. Procedimiento para grabar el video final
 
 1. Cierra notificaciones (*No molestar*), pestañas personales y cualquier archivo `.env`. Pon el navegador a 1920×1080 y el zoom de la consola al 100 % (o al 110 % si el texto se ve pequeño en el video).
 2. Ensayo completo con `make demo-rehearsal` y grabación de prueba de 3 minutos.
@@ -145,12 +164,12 @@ Las pruebas ignoran `backend/.env` y bloquean toda red externa. Solo se permiten
 5. No muestres terminales con variables de entorno ni el contenido de `backend/.env`.
 6. Revisa el video: la etiqueta *Simulated* no debe aparecer en una toma narrada como Meta real, y viceversa.
 
-## 11. Limitaciones conocidas
+## 12. Limitaciones conocidas
 
 - La consola es de **solo lectura**: no inicia ejecuciones. Se lanzan con `make demo-*`, con la API o con Swagger.
 - La actualización en vivo usa *polling* (≈1 s) de un archivo JSON que escribe el runner. No hay WebSocket.
 - La evidencia de GF-003 importada no guardaba la lista de candidatos ni los tiempos por paso. La consola lo indica, y los estados de los pasos previos al fallo se derivan de las reglas del ejecutor (`derived_steps`). Las ejecuciones nuevas sí guardan ambos.
 - El runner requiere el puerto 8080 libre (origen de la grabación).
-- La consola no muestra capturas de pantalla del navegador; la toma visual es la ventana de Chromium.
+- La consola no muestra capturas de pantalla del navegador: el navegador de la vista Demo es una **reconstrucción** a partir de la evidencia (dirección y acción del paso) y lo indica. La toma visual real es la ventana de Chromium.
 - Probado en macOS con Chrome; no se probó en Windows ni Linux en esta fase.
 - Las reglas oficiales de presentación del hackathon no se pudieron confirmar desde fuentes oficiales (ver [`SUBMISSION_CHECKLIST.md`](SUBMISSION_CHECKLIST.md)).
