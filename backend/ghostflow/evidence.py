@@ -70,6 +70,7 @@ class StepOutline(_Model):
     action: str
     label: str | None = None
     target: str | None = None  # accessible description of the element, e.g. link "Nueva solicitud"
+    location: str | None = None  # navigate: origin + path (no query); wait_for_url: the path
 
 
 class InputView(_Model):
@@ -103,6 +104,7 @@ class StepView(_Model):
     action: str
     label: str | None = None
     target: str | None = None
+    location: str | None = None
     state: StepState = "pending"
     phase: Literal["recovering"] | None = None  # live only: the step is in its recovery attempt
     exhausted_strategies: list[str] = Field(default_factory=list)  # live only, until `recovery` is set
@@ -172,6 +174,15 @@ def step_label(step) -> str | None:
     return step.description or (target.description if target is not None else None)
 
 
+def step_location(step) -> str | None:
+    if isinstance(step, NavigateStep):
+        parts = urlsplit(step.url)
+        return f"{parts.scheme}://{parts.netloc}{parts.path or '/'}"
+    if isinstance(step, WaitForUrlStep):
+        return step.path
+    return None
+
+
 def step_target(step) -> str | None:
     target = getattr(step, "target", None)
     return target.description if target is not None else None
@@ -190,7 +201,7 @@ def outline_workflow(workflow: Workflow, source: str) -> WorkflowView:
         source=source,
         sha256_before=workflow_digest(workflow),
         allowed_origins=list(workflow.allowed_origins),
-        steps=[StepOutline(id=s.id, action=s.action, label=step_label(s), target=step_target(s)) for s in workflow.steps],
+        steps=[StepOutline(id=s.id, action=s.action, label=step_label(s), target=step_target(s), location=step_location(s)) for s in workflow.steps],
         inputs=[InputView(name=i.name, label=i.label, sensitive=i.sensitive) for i in workflow.inputs],
         verify=[_verify_text(v) for v in workflow.verify],
         interpretation=workflow.interpretation.model_dump(mode="json") if workflow.interpretation else None,
@@ -211,7 +222,7 @@ def new_scenario(
         portal=portal,
         healing=healing,
         inputs=redact_inputs(workflow, inputs),
-        steps=[StepView(id=s.id, action=s.action, label=step_label(s), target=step_target(s)) for s in workflow.steps],
+        steps=[StepView(id=s.id, action=s.action, label=step_label(s), target=step_target(s), location=step_location(s)) for s in workflow.steps],
     )
 
 
