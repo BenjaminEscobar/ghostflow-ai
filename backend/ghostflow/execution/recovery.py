@@ -222,6 +222,8 @@ class RecoveryAttempt(BaseModel):
     completion_tokens: int | None = None
     reasoning_tokens: int | None = None
     candidates_considered: int = 0
+    # Public summary of the eligible candidates the advisor could choose from (what it was shown).
+    candidates: list[ProposedCandidate] = Field(default_factory=list)
     proposed: ProposedCandidate | None = None
     confidence: Confidence | None = None
     justification: str | None = None
@@ -348,6 +350,10 @@ class Healer:
         page_path, page_title = source.page_context()
         candidates = self._eligible_candidates(step, source.collect(self.policy.max_candidates))
         attempt.candidates_considered = len(candidates)
+        attempt.candidates = [
+            ProposedCandidate(id=c.id, kind=c.kind, role=c.role, name=_clip(c.name, 120), href_path=c.href_path)
+            for c in candidates
+        ]
         if not candidates:
             return self._reject(attempt, "candidates_available", "No eligible candidate on the page; model not consulted")
         by_id = {c.id: c for c in candidates}

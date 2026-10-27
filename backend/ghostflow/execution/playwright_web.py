@@ -9,8 +9,9 @@ Safety properties:
   before the step acted, and can only act on a candidate GhostFlow extracted and validated.
 """
 
+import logging
 import time
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from datetime import UTC, datetime
 from urllib.parse import urlsplit
 
@@ -47,6 +48,12 @@ from ghostflow.security.urls import UrlPolicy
 _POLL_INTERVAL_MS = 150
 _MAX_ERROR_LEN = 500
 
+log = logging.getLogger("ghostflow.execution")
+
+# Progress callback for live views (the Demo Console): event name and a JSON-ready payload.
+# Purely observational: it is called after decisions are made and its errors are ignored.
+RunObserver = Callable[[str, dict], None]
+
 
 class StepFailure(Exception):
     pass
@@ -66,17 +73,19 @@ class PlaywrightWebAdapter:
         headless: bool = True,
         step_timeout_ms: int = 10_000,
         step_delay_ms: int = 0,
+        final_hold_ms: int = 0,
         healer: Healer | None = None,
     ):
         self._policy = policy
         self._headless = headless
         self._timeout = step_timeout_ms
         self._delay = step_delay_ms
+        self._final_hold = final_hold_ms
         self._healer = healer or Healer(RecoveryPolicy(enabled=False), policy)
 
     # -- public -------------------------------------------------------------------------
 
-    def execute(self, workflow: Workflow, inputs: Mapping[str, str]) -> RunResult:
+    def execute(self, workflow: Workflow, inputs: Mapping[str, str], *, observer: RunObserver | None = None) -> RunResult:
         started = _now()
         values = resolve_inputs(workflow, inputs)
         secrets = [values[i.name] for i in workflow.inputs if i.sensitive and values.get(i.name)]
@@ -87,6 +96,14 @@ class PlaywrightWebAdapter:
         blocked: list[str] = []
         status = "passed"
         error: str | None = None
+
+        def notify(event: str, payload: dict) -> None:
+            if observer is None:
+                return
+            try:
+                observer(event, payload)
+            except Exception:  # an observer never changes the run
+                log.warning("run observer failed on %s", event, exc_info=True)
 
         def guard(route: Route) -> None:
             url = route.request.url
@@ -110,14 +127,19 @@ class PlaywrightWebAdapter:
                     for i, step in enumerate(workflow.steps):
                         if i and self._delay:
                             page.wait_for_timeout(self._delay)
-                        result = self._run_step(page, workflow, step, values, policy, secrets, state)
+                        notify("step_started", {"step_id": step.id, "index": i})
+                        result = self._run_step(page, workflow, step, values, policy, secrets, state, notify)
                         steps.append(result)
+                        notify("step_finished", result.model_dump(mode="json"))
                         if result.status == "failed":
                             status = "failed"
-                            steps.extend(
+                            skipped = [
                                 StepResult(step_id=s.id, action=s.action, status="skipped")
                                 for s in workflow.steps[i + 1 :]
-                            )
+                            ]
+                            steps.extend(skipped)
+                            for s in skipped:
+                                notify("step_finished", s.model_dump(mode="json"))
                             break
 
                     for idx, check in enumerate(workflow.verify):
@@ -125,8 +147,13 @@ class PlaywrightWebAdapter:
                             verifications.append(VerificationResult(index=idx, type=check.type, status="skipped"))
                             continue
                         verifications.append(self._verify(page, idx, check, secrets))
+                    for v in verifications:
+                        notify("verification_finished", v.model_dump(mode="json"))
                     if any(v.status == "failed" for v in verifications):
                         status = "failed"
+                    if self._final_hold:
+                        notify("holding", {"ms": self._final_hold})
+                        page.wait_for_timeout(self._final_hold)  # bounded; the browser closes next
                 finally:
                     browser.close()
         except PlaywrightError as exc:
@@ -147,7 +174,7 @@ class PlaywrightWebAdapter:
 
     def _run_step(
         self, page: Page, workflow: Workflow, step, values: dict[str, str], policy: UrlPolicy, secrets: list[str],
-        state: RunState,
+        state: RunState, notify: Callable[[str, dict], None] | None = None,
     ) -> StepResult:  # fmt: skip
         t0 = time.monotonic()
         result = StepResult(step_id=step.id, action=step.action, status="passed")
@@ -163,6 +190,8 @@ class PlaywrightWebAdapter:
                 try:
                     locator, index = self._resolve(page, step.target)
                 except ElementNotFound as failure:
+                    if notify is not None and self._healer.policy.enabled:
+                        notify("recovery_started", {"step_id": step.id, "exhausted_strategies": failure.tried})
                     self._recover(page, workflow, step, values, secrets, failure, state, result)
                     result.duration_ms = int((time.monotonic() - t0) * 1000)
                     return result

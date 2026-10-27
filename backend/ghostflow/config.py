@@ -37,6 +37,9 @@ class Settings(BaseSettings):
     max_concurrent_runs: int = 2
     # Optional pause between steps so a headed replay can be followed or filmed. 0 = off.
     step_delay_ms: int = Field(default=0, ge=0, le=5_000)
+    # Optional pause after the last verification, before the browser closes, so a headed run's
+    # final screen can be filmed. 0 = off. Bounded: the browser always closes afterwards.
+    final_hold_ms: int = Field(default=0, ge=0, le=30_000)
 
     # Semantic self-healing (GF-003): when every recorded locator of a step finds nothing, ask
     # the AI provider to pick one of the page's real candidates; deterministic checks decide.
@@ -47,6 +50,11 @@ class Settings(BaseSettings):
     healing_allow_side_effects: bool = False
     healing_max_candidates: int = Field(default=40, ge=5, le=100)
     healing_max_attempts_per_run: int = Field(default=2, ge=1, le=5)
+
+    # Demo Console (GF-004): read-only views of demo evidence bundles. Paths are relative to the
+    # backend directory, where `make backend` and `make demo-*` run.
+    demo_evidence_dir: str = "../demo-evidence"  # bundles written by the demo runner (git-ignored)
+    demo_recorded_dir: str = "../docs/evidence"  # curated recorded evidence, versioned in the repo
 
     @property
     def allowed_origin_list(self) -> list[str]:
