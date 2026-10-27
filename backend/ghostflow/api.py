@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from ghostflow import __version__
 from ghostflow.ai import ModelProvider, ModelProviderError, RecordingContext, annotate_workflow, provider_from_settings
 from ghostflow.config import Settings, get_settings
+from ghostflow.console import mount_console
 from ghostflow.dsl.models import Workflow
 from ghostflow.dsl.schema import workflow_json_schema
 from ghostflow.execution import ExecutionAdapter, Healer, InputError, RecoveryPolicy, redact_inputs
@@ -290,6 +291,7 @@ def default_adapters(
             headless=settings.browser_headless,
             step_timeout_ms=settings.step_timeout_ms,
             step_delay_ms=settings.step_delay_ms,
+            final_hold_ms=settings.final_hold_ms,
             healer=make_healer(settings, policy, provider),
         )
     }
@@ -317,4 +319,5 @@ def create_app(
         app.state.adapters = adapters(settings, app.state.policy)
     app.state.run_slots = threading.BoundedSemaphore(settings.max_concurrent_runs)
     app.include_router(router)
+    mount_console(app, settings)
     return app

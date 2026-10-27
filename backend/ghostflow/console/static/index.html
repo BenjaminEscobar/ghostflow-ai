@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; base-uri 'none'; form-action 'none'">
+  <meta name="referrer" content="no-referrer">
+  <title>GhostFlow Demo Console</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 3c-6 0-10 4.5-10 10.5V28l3.3-2.5L12.7 28 16 25.5 19.3 28l3.4-2.5L26 28V13.5C26 7.5 22 3 16 3z' fill='%238b7cff'/%3E%3Ccircle cx='12.5' cy='13.5' r='2' fill='%230b0f1a'/%3E%3Ccircle cx='19.5' cy='13.5' r='2' fill='%230b0f1a'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="console.css">
+  <script src="console.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <svg class="logo" viewBox="0 0 32 32" aria-hidden="true"><path d="M16 3c-6 0-10 4.5-10 10.5V28l3.3-2.5L12.7 28 16 25.5 19.3 28l3.4-2.5L26 28V13.5C26 7.5 22 3 16 3z"/><circle cx="12.5" cy="13.5" r="2"/><circle cx="19.5" cy="13.5" r="2"/></svg>
+      <div>
+        <div class="brand-name">GhostFlow <span>AI</span></div>
+        <div class="brand-sub">Demo Console</div>
+      </div>
+    </div>
+    <div class="source">
+      <label for="source-select">Evidence</label>
+      <select id="source-select" aria-describedby="source-hint"></select>
+      <label class="follow"><input type="checkbox" id="follow" checked> Follow live runs</label>
+    </div>
+    <div class="badges" id="badges" aria-live="polite"></div>
+  </header>
+
+  <div id="replay-banner" class="replay-banner" hidden></div>
+
+  <main id="app">
+    <section class="hero" id="hero" aria-label="Automation overview"></section>
+    <nav class="scenarios" id="scenarios" aria-label="Scenarios"></nav>
+    <div class="grid">
+      <section class="panel" id="timeline-panel" aria-labelledby="timeline-title">
+        <div class="panel-head">
+          <h2 id="timeline-title">Execution</h2>
+          <button type="button" id="replay" class="ghost-btn" hidden>▶ Replay evidence</button>
+        </div>
+        <ol class="timeline" id="timeline"></ol>
+      </section>
+      <section class="panel healing" id="healing-panel" aria-labelledby="healing-title">
+        <div class="panel-head"><h2 id="healing-title">Self-Healing</h2><span id="healing-outcome"></span></div>
+        <div id="healing"></div>
+      </section>
+      <div class="stack">
+        <section class="panel" id="intel-panel" aria-labelledby="intel-title">
+          <div class="panel-head"><h2 id="intel-title">Meta Intelligence</h2><span id="intel-badge"></span></div>
+          <div id="intel"></div>
+        </section>
+        <section class="panel" id="evidence-panel" aria-labelledby="evidence-title">
+          <div class="panel-head"><h2 id="evidence-title">Verifiable evidence</h2></div>
+          <div id="evidence"></div>
+        </section>
+      </div>
+    </div>
+  </main>
+  <p class="empty-state" id="empty" hidden></p>
+  <footer class="foot" id="source-hint"></footer>
+</body>
+</html>
