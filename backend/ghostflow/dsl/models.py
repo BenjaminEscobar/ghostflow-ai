@@ -5,6 +5,7 @@ A workflow is pure data: a closed set of actions, each with validated fields. Th
 model can make the executor run arbitrary code.
 """
 
+from datetime import datetime
 from typing import Annotated, Literal, Union
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
@@ -167,6 +168,41 @@ class ElementText(_Strict):
 Verification = Annotated[Union[TextVisible, UrlPath, ElementText], Field(discriminator="type")]
 
 
+# --- Interpretation (descriptive metadata, never executed) -------------------------------
+
+InputKind = Literal["person_name", "email", "phone", "date", "number", "identifier", "free_text", "choice", "credential", "other"]
+InputRole = Literal["parameter", "constant", "credential"]
+StepRelevance = Literal["critical", "supporting", "navigation"]
+
+
+class InputInsight(_Strict):
+    name: InputName
+    kind: InputKind
+    role: InputRole
+    description: ShortText
+
+
+class StepInsight(_Strict):
+    id: StepId
+    explanation: ShortText
+    relevance: StepRelevance
+
+
+class Interpretation(_Strict):
+    """What a model understood about the process. Adapters never read this block: it only
+    documents the workflow for people. Provenance says which provider and model wrote it."""
+
+    provider: Annotated[str, StringConstraints(min_length=1, max_length=40)]
+    model: Annotated[str, StringConstraints(min_length=1, max_length=100)]
+    generated_at: datetime
+    purpose: Annotated[str, StringConstraints(min_length=1, max_length=600)]
+    expected_outcome: ShortText | None = None
+    preconditions: list[ShortText] = Field(default_factory=list, max_length=5)
+    inputs: list[InputInsight] = Field(default_factory=list, max_length=50)
+    steps: list[StepInsight] = Field(default_factory=list, max_length=200)
+    review_notes: list[ShortText] = Field(default_factory=list, max_length=10)
+
+
 # --- Workflow ----------------------------------------------------------------------------
 
 
@@ -198,6 +234,7 @@ class Workflow(_Strict):
     inputs: list[WorkflowInput] = Field(default_factory=list, max_length=50)
     steps: list[Step] = Field(min_length=1, max_length=200)
     verify: list[Verification] = Field(default_factory=list, max_length=20)
+    interpretation: Interpretation | None = None
 
     @model_validator(mode="after")
     def _check_consistency(self) -> "Workflow":
@@ -229,6 +266,12 @@ class Workflow(_Strict):
                 unknown = refs - declared
                 if unknown:
                     raise ValueError(f"Step '{step.id}' references undeclared inputs: {sorted(unknown)}")
+
+        if self.interpretation is not None:
+            if {s.id for s in self.interpretation.steps} - set(step_ids):
+                raise ValueError("Interpretation refers to unknown step ids")
+            if {i.name for i in self.interpretation.inputs} - declared:
+                raise ValueError("Interpretation refers to unknown inputs")
         return self
 
     def canonical_origins(self) -> list[str]:

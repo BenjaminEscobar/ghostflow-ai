@@ -177,6 +177,142 @@
       "title": "FillStep",
       "type": "object"
     },
+    "InputInsight": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "pattern": "^[a-z][a-z0-9_]{0,39}$",
+          "title": "Name",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "person_name",
+            "email",
+            "phone",
+            "date",
+            "number",
+            "identifier",
+            "free_text",
+            "choice",
+            "credential",
+            "other"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "role": {
+          "enum": [
+            "parameter",
+            "constant",
+            "credential"
+          ],
+          "title": "Role",
+          "type": "string"
+        },
+        "description": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Description",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "kind",
+        "role",
+        "description"
+      ],
+      "title": "InputInsight",
+      "type": "object"
+    },
+    "Interpretation": {
+      "additionalProperties": false,
+      "description": "What a model understood about the process. Adapters never read this block: it only\ndocuments the workflow for people. Provenance says which provider and model wrote it.",
+      "properties": {
+        "provider": {
+          "maxLength": 40,
+          "minLength": 1,
+          "title": "Provider",
+          "type": "string"
+        },
+        "model": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Model",
+          "type": "string"
+        },
+        "generated_at": {
+          "format": "date-time",
+          "title": "Generated At",
+          "type": "string"
+        },
+        "purpose": {
+          "maxLength": 600,
+          "minLength": 1,
+          "title": "Purpose",
+          "type": "string"
+        },
+        "expected_outcome": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Expected Outcome"
+        },
+        "preconditions": {
+          "items": {
+            "maxLength": 200,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 5,
+          "title": "Preconditions",
+          "type": "array"
+        },
+        "inputs": {
+          "items": {
+            "$ref": "#/$defs/InputInsight"
+          },
+          "maxItems": 50,
+          "title": "Inputs",
+          "type": "array"
+        },
+        "steps": {
+          "items": {
+            "$ref": "#/$defs/StepInsight"
+          },
+          "maxItems": 200,
+          "title": "Steps",
+          "type": "array"
+        },
+        "review_notes": {
+          "items": {
+            "maxLength": 200,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 10,
+          "title": "Review Notes",
+          "type": "array"
+        }
+      },
+      "required": [
+        "provider",
+        "model",
+        "generated_at",
+        "purpose"
+      ],
+      "title": "Interpretation",
+      "type": "object"
+    },
     "LabelStrategy": {
       "additionalProperties": false,
       "properties": {
@@ -407,6 +543,38 @@
         "value"
       ],
       "title": "SelectStep",
+      "type": "object"
+    },
+    "StepInsight": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "explanation": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Explanation",
+          "type": "string"
+        },
+        "relevance": {
+          "enum": [
+            "critical",
+            "supporting",
+            "navigation"
+          ],
+          "title": "Relevance",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "explanation",
+        "relevance"
+      ],
+      "title": "StepInsight",
       "type": "object"
     },
     "Target": {
@@ -770,6 +938,17 @@
       "maxItems": 20,
       "title": "Verify",
       "type": "array"
+    },
+    "interpretation": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Interpretation"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     }
   },
   "required": [
