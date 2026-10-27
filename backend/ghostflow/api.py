@@ -1,5 +1,6 @@
 """HTTP API: recordings in, workflows out, runs on demand."""
 
+import logging
 import threading
 from collections.abc import Callable, Iterator
 from datetime import datetime
@@ -10,7 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session, sessionmaker
 
 from ghostflow import __version__
-from ghostflow.ai import ModelProvider, ModelProviderError, annotate_workflow, provider_from_settings
+from ghostflow.ai import ModelProvider, ModelProviderError, RecordingContext, annotate_workflow, provider_from_settings
 from ghostflow.config import Settings, get_settings
 from ghostflow.dsl.models import Workflow
 from ghostflow.dsl.schema import workflow_json_schema
@@ -19,6 +20,8 @@ from ghostflow.recording import RecordingCreate, RecordingRejectedError, compile
 from ghostflow.recording.compiler import CompilationError
 from ghostflow.security import UrlNotAllowedError, UrlPolicy
 from ghostflow.storage import RecordingRow, RunRow, WorkflowRow, list_rows, make_engine, make_session_factory
+
+log = logging.getLogger("ghostflow.api")
 
 # -- response / request models ------------------------------------------------------------
 
@@ -50,6 +53,8 @@ class WorkflowSummary(BaseModel):
 
 class WorkflowOut(WorkflowSummary):
     definition: Workflow
+    # Set on compilation when the AI interpretation was skipped (the workflow is still valid).
+    ai_error: str | None = None
 
 
 class RunRequest(BaseModel):
@@ -116,7 +121,8 @@ router = APIRouter(prefix="/api")
 
 @router.get("/health")
 def health(request: Request) -> dict:
-    return {"status": "ok", "version": __version__, "ai_provider": request.app.state.provider.name}
+    provider = request.app.state.provider
+    return {"status": "ok", "version": __version__, "ai_provider": provider.name, "ai_model": provider.model}
 
 
 @router.get("/schema/workflow")
@@ -155,30 +161,36 @@ def get_recording(recording_id: str, session: SessionDep) -> RecordingOut:
 @router.post("/recordings/{recording_id}/workflow", status_code=status.HTTP_201_CREATED)
 def compile_workflow(recording_id: str, body: CompileRequest, request: Request, session: SessionDep) -> WorkflowOut:
     r = _get_or_404(session, RecordingRow, recording_id, "Recording")
+    recording = RecordingCreate.model_validate(r.payload)
     try:
-        workflow = compile_recording(RecordingCreate.model_validate(r.payload), name=body.name)
+        workflow = compile_recording(recording, name=body.name)
     except (CompilationError, ValueError) as exc:
         raise HTTPException(422, f"Cannot compile recording: {exc}") from None
     _check_workflow_origins(request.app.state.policy, workflow)
 
-    annotated_by = None
+    annotated_by = ai_error = None
     if body.annotate:
         provider: ModelProvider = request.app.state.provider
         try:
-            workflow = annotate_workflow(workflow, provider)
+            workflow = annotate_workflow(workflow, provider, RecordingContext.from_recording(recording))
             if body.name:
                 workflow = workflow.model_copy(update={"name": body.name})
             annotated_by = provider.name
-        except ModelProviderError:
-            # Annotation is optional polish: keep the deterministic workflow.
-            annotated_by = None
+            log.info("ai.interpretation recording=%s provider=%s model=%s", r.id, provider.name, provider.model)
+        except ModelProviderError as exc:
+            # Interpretation is optional: keep the deterministic workflow and say why.
+            ai_error = str(exc)
+            log.warning(
+                "ai.interpretation_skipped recording=%s provider=%s model=%s reason=%s",
+                r.id, provider.name, provider.model, ai_error,
+            )  # fmt: skip
 
     row = WorkflowRow(
         name=workflow.name, source_recording_id=r.id, annotated_by=annotated_by, definition=workflow.model_dump(mode="json")
     )
     session.add(row)
     session.commit()
-    return _workflow_out(row)
+    return _workflow_out(row).model_copy(update={"ai_error": ai_error})
 
 
 @router.post("/workflows", status_code=status.HTTP_201_CREATED)
@@ -271,6 +283,7 @@ def create_app(
     app.state.policy = UrlPolicy(settings.allowed_origin_list)
     app.state.session_factory = make_session_factory(make_engine(settings.database_url))
     app.state.provider = provider or provider_from_settings(settings)
+    log.info("AI provider: %s (model %s)", app.state.provider.name, app.state.provider.model)
     app.state.adapters = adapters(settings, app.state.policy)
     app.state.run_slots = threading.BoundedSemaphore(settings.max_concurrent_runs)
     app.include_router(router)
