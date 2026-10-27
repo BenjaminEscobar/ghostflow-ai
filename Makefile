@@ -21,7 +21,7 @@ portal:  ## Serve the demo portal on http://localhost:8080
 	python3 -m http.server 8080 --bind 127.0.0.1 --directory demo-portal
 
 backend:  ## Run the API on http://localhost:8000 (SQLite, mock AI)
-	cd backend && .venv/bin/uvicorn ghostflow.main:app --host 127.0.0.1 --port 8000
+	cd backend && .venv/bin/uvicorn ghostflow.main:app --host 127.0.0.1 --port 8010
 
 schema:  ## Regenerate schemas/workflow.schema.json from the Pydantic models
 	$(BIN)/python -m ghostflow.dsl.schema > schemas/workflow.schema.json

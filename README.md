@@ -63,7 +63,7 @@ En dos terminales:
 
 ```bash
 make portal       # portal demo en http://localhost:8080
-make backend      # API en http://localhost:8000 (SQLite + IA mock); docs en /docs
+make backend      # API en http://localhost:8010 (SQLite + IA mock); docs en /docs
 ```
 
 Carga la extensión: `chrome://extensions` → activar *Modo de desarrollador* → *Cargar descomprimida* → carpeta `extension/`.
@@ -74,13 +74,13 @@ Carga la extensión: `chrome://extensions` → activar *Modo de desarrollador* �
 2. Abre el popup de **GhostFlow Recorder**, escribe un nombre y pulsa **Iniciar grabación**.
 3. En el portal: ingresa con `demo` / `ghostflow-demo` (credenciales ficticias que muestra el propio portal) → **Nueva solicitud** → completa el formulario → **Crear solicitud** → espera el mensaje *Solicitud registrada correctamente*.
 4. En el popup pulsa **Detener y enviar**. Verás `Grabación enviada: <id>`.
-5. Compila y ejecuta (o usa la UI Swagger en `http://localhost:8000/docs`):
+5. Compila y ejecuta (o usa la UI Swagger en `http://localhost:8010/docs`):
 
 ```bash
 REC=<id mostrado en el popup>
-WF=$(curl -s -X POST localhost:8000/api/recordings/$REC/workflow -H 'content-type: application/json' -d '{}' | python3 -c 'import sys,json; print(json.load(sys.stdin)["id"])')
-curl -s localhost:8000/api/workflows/$WF | python3 -m json.tool          # el workflow DSL
-curl -s -X POST localhost:8000/api/workflows/$WF/runs -H 'content-type: application/json' \
+WF=$(curl -s -X POST localhost:8010/api/recordings/$REC/workflow -H 'content-type: application/json' -d '{}' | python3 -c 'import sys,json; print(json.load(sys.stdin)["id"])')
+curl -s localhost:8010/api/workflows/$WF | python3 -m json.tool          # el workflow DSL
+curl -s -X POST localhost:8010/api/workflows/$WF/runs -H 'content-type: application/json' \
      -d '{"inputs": {"contrasena": "ghostflow-demo"}}' | python3 -m json.tool
 ```
 

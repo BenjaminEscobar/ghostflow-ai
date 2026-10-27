@@ -25,7 +25,7 @@ services:
       - "127.0.0.1:8080:8080"
       # The backend shares this container's network namespace (see below), so its port
       # is published here.
-      - "127.0.0.1:8000:8000"
+      - "127.0.0.1:8010:8000"
 
   backend:
     build: ./backend
