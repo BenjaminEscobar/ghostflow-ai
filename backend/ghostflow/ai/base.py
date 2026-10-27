@@ -16,7 +16,8 @@ class ModelProviderError(RuntimeError):
 
 
 class ModelProvider(Protocol):
-    name: str
+    name: str  # provider id, e.g. "meta"
+    model: str  # model id used for every call, recorded as provenance
 
     def generate_structured(self, *, task: str, instruction: str, payload: dict, response_model: type[T]) -> T:
         """Ask the model for a JSON object matching `response_model` and return it validated."""
