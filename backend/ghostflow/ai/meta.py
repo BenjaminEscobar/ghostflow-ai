@@ -144,7 +144,10 @@ class MetaModelProvider:
 
     # -- public ---------------------------------------------------------------------------
 
-    def generate_structured(self, *, task: str, instruction: str, payload: dict, response_model: type[T]) -> T:
+    def generate_structured(
+        self, *, task: str, instruction: str, payload: dict, response_model: type[T], stats: dict | None = None
+    ) -> T:
+        stats = {} if stats is None else stats
         content = json.dumps(payload, ensure_ascii=False)
         if len(content) > MAX_PAYLOAD_CHARS:
             raise ModelProviderError(f"Payload too large for the model ({len(content)} > {MAX_PAYLOAD_CHARS} chars)")
@@ -163,13 +166,14 @@ class MetaModelProvider:
         if self._reasoning_effort:
             body["reasoning_effort"] = self._reasoning_effort
 
-        response, latency_ms = self._post_with_retries(task, body)
+        response, latency_ms = self._post_with_retries(task, body, stats)
         try:
             data = response.json()
         except ValueError:
             raise ModelProviderError("Meta Model API returned a non-JSON body") from None
         usage = _usage(data)
         self._account(usage)
+        stats.update({k: v for k, v in usage.items() if isinstance(v, int)})
         log.info(
             "ai.call provider=meta model=%s task=%s status=%s latency_ms=%d prompt_tokens=%s completion_tokens=%s "
             "reasoning_tokens=%s",
@@ -204,10 +208,13 @@ class MetaModelProvider:
                 if isinstance(v, int):
                     self.usage_totals[k] += v
 
-    def _post_with_retries(self, task: str, body: dict) -> tuple[httpx.Response, int]:
+    def _post_with_retries(self, task: str, body: dict, stats: dict) -> tuple[httpx.Response, int]:
         attempt = 0
+        stats.setdefault("requests", 0)
+        stats.setdefault("latency_ms", 0)
         while True:
             self._reserve_request()
+            stats["requests"] += 1
             started = time.monotonic()
             try:
                 response = self._client.post(
@@ -222,6 +229,7 @@ class MetaModelProvider:
                 log.warning("ai.call provider=meta model=%s task=%s error=%s", self.model, task, type(exc).__name__)
                 raise ModelProviderError(f"Meta Model API request failed: {type(exc).__name__}") from None
             latency_ms = int((time.monotonic() - started) * 1000)
+            stats["latency_ms"] += latency_ms
             if response.status_code == 200:
                 return response, latency_ms
 

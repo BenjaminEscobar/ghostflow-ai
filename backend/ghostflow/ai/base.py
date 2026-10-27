@@ -19,6 +19,11 @@ class ModelProvider(Protocol):
     name: str  # provider id, e.g. "meta"
     model: str  # model id used for every call, recorded as provenance
 
-    def generate_structured(self, *, task: str, instruction: str, payload: dict, response_model: type[T]) -> T:
-        """Ask the model for a JSON object matching `response_model` and return it validated."""
+    def generate_structured(
+        self, *, task: str, instruction: str, payload: dict, response_model: type[T], stats: dict | None = None
+    ) -> T:
+        """Ask the model for a JSON object matching `response_model` and return it validated.
+
+        When `stats` is given, the provider fills it with what it knows about the call
+        (latency_ms, prompt_tokens, completion_tokens, reasoning_tokens, requests), also on failure."""
         ...

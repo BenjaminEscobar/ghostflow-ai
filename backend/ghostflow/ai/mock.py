@@ -58,16 +58,40 @@ def _annotate(payload: dict) -> dict:
     }
 
 
+def _recover(payload: dict) -> dict:
+    """Offline stand-in for recovery: no semantics, only the one deterministic clue it can use
+    (a single link whose path is the page the workflow expects next). Anything else: no answer."""
+    expected = payload.get("failed_step", {}).get("expected_next_path")
+    links = [c for c in payload.get("candidates", []) if c.get("kind") == "link" and expected and c.get("href_path") == expected]
+    if len(links) == 1:
+        return {
+            "candidate_id": links[0]["id"],
+            "confidence": "high",
+            "justification": f"[mock] Único enlace hacia {expected}, la página que el workflow espera a continuación.",
+            "rejection_reason": "",
+        }
+    return {
+        "candidate_id": "",
+        "confidence": "none",
+        "justification": "",
+        "rejection_reason": "[mock] El proveedor offline no razona semánticamente y no hay un único enlace al destino esperado.",
+    }
+
+
 class MockModelProvider:
     name = "mock"
     model = "mock-deterministic"
 
     def __init__(self, responders: dict[str, Callable[[dict], dict]] | None = None):
-        self._responders = {"annotate_workflow": _annotate, **(responders or {})}
+        self._responders = {"annotate_workflow": _annotate, "recover_element": _recover, **(responders or {})}
         self.calls: list[tuple[str, dict]] = []
 
-    def generate_structured(self, *, task: str, instruction: str, payload: dict, response_model: type[T]) -> T:
+    def generate_structured(
+        self, *, task: str, instruction: str, payload: dict, response_model: type[T], stats: dict | None = None
+    ) -> T:
         self.calls.append((task, payload))
+        if stats is not None:
+            stats.update(latency_ms=0, requests=0)
         responder = self._responders.get(task)
         if responder is None:
             raise ModelProviderError(f"Mock provider has no responder for task '{task}'")
