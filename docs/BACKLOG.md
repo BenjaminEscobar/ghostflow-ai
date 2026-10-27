@@ -25,6 +25,15 @@ Mejoras identificadas durante GF-001 y dejadas fuera de alcance a propósito.
 - Exponer el estado del self-healing en un endpoint de configuración (no se agregó a `/api/health` para mantener su contrato de GF-002).
 - Panel de auditoría de recuperaciones por workflow (consola Angular).
 
+## Demo Console (GF-004)
+- Eventos en vivo por Server-Sent Events en lugar de *polling* de archivos.
+- Lanzar ejecuciones desde la consola (requiere autenticación y confirmación explícita; hoy es solo lectura a propósito).
+- Captura de pantalla redactada por paso y vista lado a lado navegador/consola.
+- Exportar una evidencia como informe PDF o Markdown firmado (hash del bundle).
+- Comparar dos ejecuciones (p. ej. A y C) paso a paso.
+- Selector de idioma ES/EN en la consola.
+- Registrar la lista de candidatos también en la importación de evidencias antiguas (no es posible con la evidencia GF-003 actual).
+
 ## Captura y ejecución
 - Navegación SPA (`history.pushState`, `hashchange`).
 - iframes del mismo origen, shadow DOM, carga de archivos, teclas adicionales, doble clic, hover.

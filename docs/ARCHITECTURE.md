@@ -1,4 +1,4 @@
-# Arquitectura — GF-001 / GF-002 / GF-003
+# Arquitectura — GF-001 / GF-002 / GF-003 / GF-004
 
 ## Principios
 
@@ -17,6 +17,8 @@
 | `ai` | `ModelProvider` (mock / Meta Muse Spark), tarea de interpretación, CLI de comparación | `dsl`, `recording` (modelos), `security` |
 | `execution` | `ExecutionAdapter` + adaptador `web` (Playwright), self-healing (`recovery.py`) | `dsl`, `security` |
 | `storage` | Tablas `recordings`, `workflows`, `runs` (documentos JSON) | — |
+| `evidence` | Evidencias de demo: modelo, construcción desde eventos y `RunResult`, saneamiento, etiquetas real/simulado y vivo/guardado | `dsl`, `execution` (modelos), `security` |
+| `console` | Demo Console: estáticos + `GET /api/demo/*` de solo lectura | `evidence`, `storage` |
 | `api` | Endpoints y composición (`create_app`) | todos |
 
 `execution` no importa `ai`: define el contrato `RecoveryAdvisor` (datos de entrada y salida) y `ai/recovery.py` lo implementa sobre cualquier `ModelProvider`. La API los conecta. La IA nunca toca el motor ni el navegador.
@@ -118,3 +120,26 @@ PlaywrightWebAdapter._run_step
 - **Duplicados:** el adaptador recuerda si un clic o Enter fue de tipo envío (`SUBMITS_JS`) y lo da por confirmado solo cuando un `wait_for_url`/`navigate` posterior pasa. Mientras no esté confirmado, ningún control con efectos secundarios se recupera.
 - **Compatibilidad:** `healed` conserva su significado de GF-001 (localizador grabado alternativo); `resolution` y `recovery` son campos nuevos opcionales del resultado JSON (sin migraciones).
 - **Proveedor offline:** el mock solo recupera cuando hay un único enlace a la ruta esperada y lo declara como `provider: "mock"`; la evidencia nunca se atribuye a Meta si no hubo llamada real.
+
+## Demo Console (GF-004)
+
+```
+ demo_healing (runner)                       backend FastAPI (make console)          navegador
+ ─────────────────────                       ──────────────────────────────          ─────────
+ PlaywrightWebAdapter.execute(observer=…)
+   step_started / recovery_started /
+   step_finished / verification_finished
+        │ apply_event / finish_scenario
+        ▼
+ demo-evidence/<run>.json  (escritura atómica) ──► EvidenceStore ──► GET /api/demo/sources ──► /console/
+ docs/evidence/*.json      (versionadas)      ──►  (re-saneo)    ──► GET /api/demo/sources/… (polling ≈1 s)
+ tablas workflows/runs                          ──► bundle_from_runs (solo lectura)
+```
+
+- **Observador pasivo:** el adaptador emite eventos *después* de cada decisión. Los errores del observador se registran y se ignoran, de modo que no cambian el resultado, no repiten acciones ni añaden reintentos. `recovery_started` solo se emite si el self-healing está activado.
+- **Modo visual:** `step_delay_ms` (entre pasos) y `final_hold_ms` (antes de cerrar el navegador, acotado a 30 s) valen 0 por defecto. La semántica de los pasos no cambia.
+- **Evidencia como contrato:** `EvidenceBundle` (`ghostflow.demo-evidence/1`, `extra="forbid"`). El `RunResult` final es autoritativo sobre los eventos. Los valores sensibles se guardan como `***` y los textos libres pasan por `mask_secrets` al escribir y al leer.
+- **Real frente a simulado:** `ai_badge` decide la etiqueta con lo que consta en la evidencia (`provider` y `requests_sent`), no con la configuración. `presentation_mode` nunca devuelve `live` para `docs/evidence` ni para un archivo que dejó de actualizarse (más de 20 s → `stale`).
+- **Importación GF-003:** `import-gf003` exige el mismo SHA-256 del workflow, marca los estados derivados (`derived_steps`) y deja la procedencia en `provenance`.
+- **Frontend sin build:** HTML, CSS y JS sin dependencias, servidos por FastAPI. El DOM se construye con `textContent`; la CSP es `default-src 'none'`, solo `'self'` para scripts, estilos y `connect`, y no hay recursos externos.
+- **Auditoría ampliada:** `RecoveryAttempt.candidates` guarda el resumen público de los candidatos que vio el modelo (id, tipo, rol, nombre saneado y ruta), sin URLs completas ni valores. Es el único cambio en el modelo de GF-003 y es aditivo: las reglas de recuperación no cambiaron.

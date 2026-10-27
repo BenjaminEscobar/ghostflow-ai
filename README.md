@@ -34,7 +34,10 @@ backend/            FastAPI + compilador + DSL + motor Playwright + pruebas
     dsl/            Workflow DSL v0.1 (Pydantic) y exportación JSON Schema
     recording/      Modelo de eventos, saneamiento y compilador grabación → workflow
     ai/             Contrato de proveedor, mock, proveedor Meta (Muse Spark), interpretación, CLI de comparación
-    execution/      Contrato ExecutionAdapter + adaptador web (Playwright)
+    execution/      Contrato ExecutionAdapter + adaptador web (Playwright) + self-healing
+    evidence.py     Evidencias de demo (GF-004): modelo, saneamiento, importación
+    console/        Demo Console: página estática + vistas JSON de solo lectura
+    demo_healing.py Runner de la demo A/B/C (modo visual, evidencia en vivo)
     security/       Allowlist de orígenes (anti-SSRF) y redacción de secretos
     storage.py      SQLAlchemy (PostgreSQL / SQLite)
   tests/            Unitarias, API y E2E (marcadas `e2e`)
@@ -42,7 +45,7 @@ extension/          Chrome Extension Manifest V3 (sin build)
 demo-portal/        Portal ficticio "Andina Servicios" (HTML/JS estático, datos sintéticos)
 schemas/            workflow.schema.json generado desde el DSL
 infra/              Configuración nginx del portal
-docs/               Arquitectura, backlog y grabación de ejemplo (docs/examples)
+docs/               Arquitectura, backlog, runbook/guion/checklist de la demo, ejemplos y evidencias
 ```
 
 ## Requisitos
@@ -155,6 +158,23 @@ Ambas compilan **una vez** `docs/examples/demo-recording.json` y ejecutan el mis
 
 Con la extensión y la API: graba y compila contra `make portal`; luego detén el portal y ejecuta `make portal-variant` (mismo origen); reinicia el backend con `GHOSTFLOW_HEALING_ENABLED=true` (y `GHOSTFLOW_AI_PROVIDER=meta` para Muse Spark) y vuelve a lanzar `POST /api/workflows/{id}/runs`.
 
+## Demo Console (GF-004)
+
+Página web de solo lectura en `http://127.0.0.1:8010/console/` (`make console`). Muestra el workflow, la ejecución paso a paso (Pending / Running / Completed / Failed / Recovered), la interpretación de Muse Spark, el panel de self-healing (elemento original → elemento nuevo, localizadores agotados, candidatos, justificación, confianza y validaciones) y la evidencia verificable (resultado, verificaciones, proveedor, latencia, tokens y SHA-256 del DSL antes y después).
+
+```bash
+make console          # terminal 1: API + consola
+make demo-rehearsal   # terminal 2: A/B/C en navegador visible, mock (SIMULADO, 0 solicitudes a Meta)
+make demo-live        # A/B/C con Meta real en C: máx. 1 solicitud, pide escribir "meta" para confirmar
+```
+
+- **Fuentes:** ejecuciones del runner (`demo-evidence/`, ignorado por Git, en vivo mientras se escriben), evidencia versionada (`docs/evidence/`, p. ej. la validación real de GF-003 con Muse Spark) y los workflows y ejecuciones guardados en el backend.
+- **Sin ambigüedad:** cada vista indica *Live*, *Saved run*, *Recorded evidence* o *Stored runs*, y si la IA fue *Real Meta Model API* o *Simulated (mock)*. Una evidencia guardada nunca se presenta como ejecución en vivo; el *Replay* lleva una franja que lo dice.
+- **Seguridad:** la consola solo hace `GET` a `/api/demo/*`, construye el DOM con `textContent` (sin HTML de las evidencias), tiene una CSP estricta sin recursos externos y vuelve a sanear cada evidencia al leerla.
+- **Modo visual:** `GHOSTFLOW_STEP_DELAY_MS` y `GHOSTFLOW_FINAL_HOLD_MS` (o `--delay-ms` / `--hold-ms`). Ambos valen 0 por defecto.
+
+Guía completa: [`docs/DEMO_RUNBOOK.md`](docs/DEMO_RUNBOOK.md) · guion: [`docs/DEMO_SCRIPT.md`](docs/DEMO_SCRIPT.md) · entrega: [`docs/SUBMISSION_CHECKLIST.md`](docs/SUBMISSION_CHECKLIST.md).
+
 ## Stack completo con Docker
 
 ```bash
@@ -177,6 +197,9 @@ El backend comparte el espacio de red del contenedor del portal, de modo que `ht
 | GET | `/api/workflows`, `/api/workflows/{id}` | Consulta |
 | POST | `/api/workflows/{id}/runs` | Ejecuta con Playwright y verifica |
 | GET | `/api/workflows/{id}/runs`, `/api/runs/{id}` | Historial de ejecuciones |
+| GET | `/api/demo/sources` | Evidencias de demo y workflows disponibles para la consola (solo lectura) |
+| GET | `/api/demo/sources/{recorded\|runs\|workflows}/{nombre}` | Una evidencia normalizada y sus etiquetas (en vivo, guardada, real o simulada) |
+| GET | `/console/` | Demo Console (estática) |
 
 ## Configuración
 
@@ -202,6 +225,9 @@ Variables `GHOSTFLOW_*` (ver `backend/ghostflow/config.py`):
 | `GHOSTFLOW_HEALING_MAX_CANDIDATES` | `40` | Candidatos extraídos por intento (5–100) |
 | `GHOSTFLOW_HEALING_MAX_ATTEMPTS_PER_RUN` | `2` | Intentos por ejecución (uno por paso como máximo) |
 | `GHOSTFLOW_STEP_DELAY_MS` | `0` | Pausa visual entre pasos para demos |
+| `GHOSTFLOW_FINAL_HOLD_MS` | `0` | Mantiene visible la pantalla final antes de cerrar el navegador (máx. 30000) |
+| `GHOSTFLOW_DEMO_EVIDENCE_DIR` | `../demo-evidence` | Evidencias que escribe el runner de la demo (relativo a `backend/`) |
+| `GHOSTFLOW_DEMO_RECORDED_DIR` | `../docs/evidence` | Evidencias versionadas que muestra la consola |
 | `GHOSTFLOW_STEP_TIMEOUT_MS` | `10000` | Tiempo máximo por paso |
 | `GHOSTFLOW_BROWSER_HEADLESS` | `true` | `false` para ver la reproducción |
 | `GHOSTFLOW_MAX_CONCURRENT_RUNS` | `2` | Límite de ejecuciones simultáneas |
@@ -227,6 +253,7 @@ Para autorizar otro dominio hay que cambiarlo en tres lugares, a propósito: `GH
 - Las ejecuciones son síncronas dentro de la petición HTTP (sin cola).
 - Sin autenticación en la API: pensada para uso local. No exponer públicamente.
 - Las tablas se crean al iniciar; no hay migraciones (Alembic en backlog).
+- Demo Console: solo lectura, con *polling* (sin WebSocket); la evidencia importada de GF-003 no incluye la lista de candidatos ni los tiempos por paso (se indica en pantalla).
 - Self-healing: solo marco principal (sin iframes ni shadow DOM), solo elementos visibles e interactivos estándar, y sin aprendizaje persistente; un rediseño que cambie el destino de un enlace no se recupera (la regla de destino esperado lo impide a propósito).
 - La validación contra la API real de Meta depende de una clave configurada por el propietario (ver informe de GF-002).
 - La interpretación con Meta es una sola llamada síncrona dentro de la compilación (hasta el timeout); no hay re-interpretación de workflows existentes.
