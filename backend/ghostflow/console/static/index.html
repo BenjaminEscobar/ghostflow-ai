@@ -72,8 +72,11 @@
                 <title id="mascot-title">GhostFlow mascot</title>
                 <defs>
                   <linearGradient id="gf-body" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0" stop-color="#ffffff"/><stop offset=".6" stop-color="#eef2ff"/><stop offset="1" stop-color="#d9d2ff"/>
+                    <stop offset="0" stop-color="#ffffff"/><stop offset=".55" stop-color="#f0f3ff"/><stop offset="1" stop-color="#d8d0ff"/>
                   </linearGradient>
+                  <radialGradient id="gf-light" cx="0.38" cy="0.3" r="0.75">
+                    <stop offset="0" stop-color="#ffffff" stop-opacity=".95"/><stop offset=".6" stop-color="#ffffff" stop-opacity="0"/>
+                  </radialGradient>
                   <linearGradient id="gf-ring" x1="0" y1="0" x2="1" y2="0">
                     <stop offset="0" stop-color="#1877F2"/><stop offset="1" stop-color="#8f6bff"/>
                   </linearGradient>
@@ -86,17 +89,25 @@
                 <ellipse class="ring back" cx="80" cy="112" rx="62" ry="14" fill="none" stroke="url(#gf-ring)" stroke-width="2.5" stroke-opacity=".45"/>
                 <g class="float">
                   <circle class="glow" cx="80" cy="74" r="56" fill="url(#gf-glow)"/>
+                  <g class="arm arm-l"><path d="M41 86c-9 1-15 6-16 12-.4 2.6 2.2 4 4.3 2.6 4-2.8 8-4.4 13-4.6z" fill="#e9ecff" stroke="#cdd6f6" stroke-width="1.5"/></g>
+                  <g class="arm arm-r"><path d="M119 86c9 1 15 6 16 12 .4 2.6-2.2 4-4.3 2.6-4-2.8-8-4.4-13-4.6z" fill="#e9ecff" stroke="#cdd6f6" stroke-width="1.5"/></g>
                   <path class="tuft" d="M66 31c-2-7 1-12 6-13-1 5 1 9 4 11zM94 31c2-7-1-12-6-13 1 5-1 9-4 11z" fill="#e3e4ff"/>
                   <path class="body" fill="url(#gf-body)" stroke="#cdd6f6" stroke-width="1.5" d="M80 26c-26 0-42 19.5-42 45v51c0 3.6 4.2 5.6 7 3.3l8-6.4 9.4 7.3c2.2 1.7 5.2 1.7 7.4 0L80 119l10.2 7.2c2.2 1.7 5.2 1.7 7.4 0l9.4-7.3 8 6.4c2.8 2.3 7 .3 7-3.3V71c0-25.5-16-45-42-45z"/>
+                  <path class="light" fill="url(#gf-light)" d="M80 28c-24 0-39 18-39 42v18c10-22 30-36 56-40 10-1.5 18 0 22 2-4-13-18-22-39-22z"/>
                   <path class="shine" d="M53 52c3.5-9 11-15 20-16.5" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round"/>
-                  <g class="eyes-open"><ellipse cx="66" cy="72" rx="7" ry="9" fill="#1d2a5c"/><ellipse cx="94" cy="72" rx="7" ry="9" fill="#1d2a5c"/><circle cx="68.5" cy="68" r="2.6" fill="#fff"/><circle cx="96.5" cy="68" r="2.6" fill="#fff"/></g>
+                  <g class="eyes-open"><g class="look"><ellipse cx="66" cy="72" rx="7.5" ry="9.5" fill="#1d2a5c"/><ellipse cx="94" cy="72" rx="7.5" ry="9.5" fill="#1d2a5c"/><circle cx="68.8" cy="67.6" r="2.8" fill="#fff"/><circle cx="96.8" cy="67.6" r="2.8" fill="#fff"/><circle cx="63.6" cy="76" r="1.2" fill="#fff" opacity=".7"/><circle cx="91.6" cy="76" r="1.2" fill="#fff" opacity=".7"/></g></g>
                   <g class="eyes-happy" fill="none" stroke="#1d2a5c" stroke-width="4" stroke-linecap="round"><path d="M59 74c3-6 11-6 14 0"/><path d="M87 74c3-6 11-6 14 0"/></g>
+                  <g class="brows-focus" fill="none" stroke="#1d2a5c" stroke-width="3" stroke-linecap="round"><path d="M58 58l13 3"/><path d="M102 58l-13 3"/></g>
+                  <g class="brows-worried" fill="none" stroke="#1d2a5c" stroke-width="3" stroke-linecap="round"><path d="M59 61l12-4"/><path d="M101 61l-12-4"/></g>
                   <g class="blush" fill="#f4b6dc" opacity=".85"><ellipse cx="55" cy="86" rx="6" ry="3.5"/><ellipse cx="105" cy="86" rx="6" ry="3.5"/></g>
                   <path class="mouth-smile" d="M73 88c4 4.5 10 4.5 14 0" fill="none" stroke="#1d2a5c" stroke-width="3.2" stroke-linecap="round"/>
                   <ellipse class="mouth-o" cx="80" cy="90" rx="4" ry="4.6" fill="#1d2a5c"/>
                   <path class="mouth-worried" d="M73 92c4-4.5 10-4.5 14 0" fill="none" stroke="#1d2a5c" stroke-width="3.2" stroke-linecap="round"/>
+                  <path class="mouth-flat" d="M74 90h12" fill="none" stroke="#1d2a5c" stroke-width="3.2" stroke-linecap="round"/>
+                  <g class="lens"><circle cx="128" cy="88" r="10" fill="#eaf2fe" fill-opacity=".7" stroke="#1877F2" stroke-width="3.5"/><path d="M135 95l9 9" stroke="#1877F2" stroke-width="5" stroke-linecap="round"/><path d="M123 84c1.5-2 3.5-3 6-3" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"/></g>
                 </g>
                 <path class="ring front" d="M18 112c0 7.7 27.8 14 62 14s62-6.3 62-14" fill="none" stroke="url(#gf-ring)" stroke-width="3" stroke-linecap="round"/>
+                <g class="ticks"><g class="tick t1"><circle cx="52" cy="14" r="7" fill="#e8f7ee"/><path d="M48.5 14l2.5 2.5 4.5-5" fill="none" stroke="#0d7a3c" stroke-width="2.2" stroke-linecap="round"/></g><g class="tick t2"><circle cx="80" cy="8" r="7" fill="#e8f7ee"/><path d="M76.5 8l2.5 2.5 4.5-5" fill="none" stroke="#0d7a3c" stroke-width="2.2" stroke-linecap="round"/></g><g class="tick t3"><circle cx="108" cy="14" r="7" fill="#e8f7ee"/><path d="M104.5 14l2.5 2.5 4.5-5" fill="none" stroke="#0d7a3c" stroke-width="2.2" stroke-linecap="round"/></g></g>
                 <g class="sparkles" fill="#7b5cff">
                   <path d="M134 30l3 7.5 7.5 3-7.5 3-3 7.5-3-7.5-7.5-3 7.5-3z"/>
                   <path d="M24 40l2.2 5.3 5.3 2.2-5.3 2.2-2.2 5.3-2.2-5.3-5.3-2.2 5.3-2.2z"/>
@@ -104,6 +115,7 @@
                 </g>
               </svg>
               <p class="mascot-say" id="mascot-say" aria-hidden="true"></p>
+              <p class="sr-only" id="agent-status" role="status" aria-live="polite"></p>
             </div>
           </section>
           <section class="card how" aria-labelledby="how-title">
@@ -128,19 +140,31 @@
                 <h2 id="sc-title"></h2>
                 <p id="sc-sub"></p>
               </div>
-              <div class="result" id="result-summary" aria-live="polite"></div>
+              <div class="result" id="result-summary"></div>
             </div>
             <div class="sc-body">
               <ol class="pages" id="steps" aria-label="Steps by page"></ol>
               <div class="stage-col">
+                <div class="stage-tools">
+                  <span class="prov" id="stage-prov"></span>
+                  <div class="view-toggle" id="view-toggle" role="group" aria-label="Browser view" hidden>
+                    <button type="button" id="show-capture" aria-pressed="true">Real capture</button>
+                    <button type="button" id="show-reconstructed" aria-pressed="false">Reconstructed</button>
+                  </div>
+                </div>
                 <div class="browser">
                   <div class="browser-bar" aria-hidden="true"><i></i><i></i><i></i><span class="address" id="address"></span></div>
+                  <figure class="shot" id="shot" hidden>
+                    <div class="shot-frame" id="shot-frame"></div>
+                    <figcaption class="shot-note" id="shot-note"></figcaption>
+                  </figure>
                   <div class="browser-body">
                     <div class="page" id="page"></div>
                     <div class="action" id="action" aria-live="polite"></div>
                   </div>
                 </div>
                 <p class="caption" id="stage-caption"></p>
+                <ol class="film" id="film" aria-label="Browser captures of this scenario" hidden></ol>
                 <ul class="events" id="events" aria-label="What happened"></ul>
               </div>
             </div>
