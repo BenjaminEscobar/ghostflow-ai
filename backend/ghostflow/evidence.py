@@ -347,24 +347,26 @@ def sanitize_bundle(bundle: EvidenceBundle) -> EvidenceBundle:
 
 
 def ai_badge(ai: AiSource) -> dict:
-    """How the console labels the AI that advised self-healing. Never ambiguous."""
+    """How the console labels the AI that advised self-healing. Never ambiguous, and scoped to the
+    recovery stage: the workflow interpretation has its own badge and may come from another provider."""
     if ai.provider == "meta" and ai.requests_sent > 0:
         n = ai.requests_sent
-        return {"kind": "real", "text": f"Real Meta Model API · {ai.model} · {n} request{'s' if n != 1 else ''}"}
+        return {"kind": "real", "text": f"Recovery · Real Meta Model API · {ai.model} · {n} request{'s' if n != 1 else ''}"}
     if ai.provider == "meta":
-        return {"kind": "none", "text": f"Meta configured ({ai.model}) · no request sent"}
+        return {"kind": "none", "text": f"Recovery · Meta configured ({ai.model}) · no request sent"}
     if ai.provider == "mock":
-        return {"kind": "simulated", "text": "Simulated AI · offline mock · no Meta request"}
-    return {"kind": "none", "text": "No AI recovery in this evidence"}
+        return {"kind": "simulated", "text": "Recovery · Simulated AI · offline mock · 0 Meta requests"}
+    return {"kind": "none", "text": "Recovery · no AI recovery in this evidence"}
 
 
 def interpretation_badge(interpretation: dict | None) -> dict:
+    """The workflow interpretation (GF-002), stored when the workflow was compiled: never a new call."""
     if not interpretation:
-        return {"kind": "none", "text": "No AI interpretation stored for this workflow"}
+        return {"kind": "none", "text": "Interpretation · none stored for this workflow"}
     provider, model = interpretation.get("provider"), interpretation.get("model")
     if provider == "meta":
-        return {"kind": "real", "text": f"Meta Muse Spark · {model}"}
-    return {"kind": "simulated", "text": f"Simulated interpretation · {provider} ({model})"}
+        return {"kind": "real", "text": f"Interpretation · Meta Muse Spark · {model} · recorded"}
+    return {"kind": "simulated", "text": f"Interpretation · simulated · {provider} ({model})"}
 
 
 def presentation_mode(bundle: EvidenceBundle, collection: str, now: datetime | None = None) -> dict:

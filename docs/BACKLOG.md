@@ -26,7 +26,11 @@ Mejoras identificadas durante GF-001 y dejadas fuera de alcance a propósito.
 - Panel de auditoría de recuperaciones por workflow (consola Angular).
 
 ## Demo Console (GF-004)
-- Recomendaciones UX priorizadas de la revisión GF-006: [informe independiente](GF006_INDEPENDENT_REVIEW.md). Priorizar ampliación del navegador y etiquetas separadas de interpretación/recuperación para el hackathon; las demás mejoras requieren revisión visual humana.
+- Recomendaciones UX priorizadas de la revisión GF-006: [informe independiente](GF006_INDEPENDENT_REVIEW.md). La ampliación del navegador y las etiquetas separadas de interpretación/recuperación ya están hechas (pulido final). Las demás mejoras requieren revisión visual humana.
+- Visor ampliado: botón *Replay evidence* dentro del diálogo (hoy se inicia antes de ampliar y la reproducción continúa dentro), modo de pantalla completa del sistema (Fullscreen API) y zoom por clic sobre la captura a sus píxeles reales.
+- Vista Demo: plegar la lista de pasos en pantallas bajas y decidir si las páginas del flujo (*stepper*) deben fusionarse con la lista de pasos; requiere revisión visual humana.
+- Vista Demo (fuera del alcance del refinamiento final): modo oscuro con los mismos tokens; recuadro sobre el elemento elegido en la captura `s7` cuando el motor emita una captura propia del paso recuperado (hoy no existe y no se fabrica); mostrar los eventos en la columna derecha durante una ejecución en vivo si la revisión humana lo pide (hoy solo en el visor ampliado y en Developer).
+- Procedencia: guardar en el workflow el número de solicitudes de la interpretación (hoy no se registra, así que la consola no lo muestra) y mostrar en Developer *N/A · offline mock* en lugar de `?` para los tokens del mock.
 - Navegador continuo: [comparación y propuesta GF-006](GF006_LIVE_BROWSER_RESEARCH.md). Sin implementación ni endpoints nuevos en esta misión; considerar `page.screencast` nativo además de CDP.
 - Eventos en vivo por Server-Sent Events en lugar de *polling* de archivos.
 - Lanzar ejecuciones desde la consola (requiere autenticación y confirmación explícita; hoy es solo lectura a propósito).

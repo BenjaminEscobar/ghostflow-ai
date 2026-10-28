@@ -48,112 +48,94 @@
         <h2 class="side-title" id="scenarios-title">Scenarios</h2>
         <nav class="scenarios" id="scenarios" role="tablist" aria-labelledby="scenarios-title" aria-orientation="vertical"></nav>
       </section>
-      <div class="side-foot">
-        <svg class="brand-mark small" viewBox="0 0 32 32" aria-hidden="true" focusable="false">
-          <rect class="bm-bg soft" width="32" height="32" rx="9"/>
-          <path class="bm-body tint" d="M16 6.5c-4.6 0-7.6 3.4-7.6 8v9.4c0 .7.8 1.1 1.4.7l1.6-1.2 1.8 1.4c.4.3 1 .3 1.4 0L16 23.4l1.4 1.4c.4.3 1 .3 1.4 0l1.8-1.4 1.6 1.2c.6.4 1.4 0 1.4-.7v-9.4c0-4.6-3-8-7.6-8z"/>
-        </svg>
-        <div><strong>GhostFlow AI</strong><span>Automation that adapts</span></div>
-      </div>
     </aside>
 
     <main id="app" tabindex="-1">
       <section id="demo-view" role="tabpanel" aria-labelledby="tab-demo">
-        <div class="hero-row">
-          <section class="hero" aria-labelledby="hero-title">
-            <div class="hero-text">
-              <p class="eyebrow" id="wf-name"></p>
+        <section class="card hero" aria-labelledby="hero-title">
+          <div class="hero-art">
+            <svg class="mascot" id="mascot" viewBox="0 0 160 160" role="img" aria-labelledby="mascot-title" data-mood="idle">
+              <title id="mascot-title">GhostFlow mascot</title>
+              <defs>
+                <linearGradient id="gf-body" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0" stop-color="#ffffff"/><stop offset=".55" stop-color="#f0f3ff"/><stop offset="1" stop-color="#d8d0ff"/>
+                </linearGradient>
+                <radialGradient id="gf-light" cx="0.38" cy="0.3" r="0.75">
+                  <stop offset="0" stop-color="#ffffff" stop-opacity=".95"/><stop offset=".6" stop-color="#ffffff" stop-opacity="0"/>
+                </radialGradient>
+                <linearGradient id="gf-ring" x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0" stop-color="#1877F2"/><stop offset="1" stop-color="#8f6bff"/>
+                </linearGradient>
+                <radialGradient id="gf-glow" cx="0.5" cy="0.5" r="0.5">
+                  <stop offset="0" stop-color="#5ea8ff" stop-opacity=".18"/><stop offset=".55" stop-color="#5ea8ff" stop-opacity=".08"/><stop offset="1" stop-color="#5ea8ff" stop-opacity="0"/>
+                </radialGradient>
+              </defs>
+              <circle class="aura" cx="80" cy="78" r="78" fill="url(#gf-glow)"/>
+              <ellipse class="shadow" cx="80" cy="146" rx="34" ry="5"/>
+              <ellipse class="ring back" cx="80" cy="112" rx="62" ry="14" fill="none" stroke="url(#gf-ring)" stroke-width="2.5" stroke-opacity=".45"/>
+              <g class="float">
+                <circle class="glow" cx="80" cy="74" r="56" fill="url(#gf-glow)"/>
+                <g class="arm arm-l"><path d="M41 86c-9 1-15 6-16 12-.4 2.6 2.2 4 4.3 2.6 4-2.8 8-4.4 13-4.6z" fill="#e9ecff" stroke="#cdd6f6" stroke-width="1.5"/></g>
+                <g class="arm arm-r"><path d="M119 86c9 1 15 6 16 12 .4 2.6-2.2 4-4.3 2.6-4-2.8-8-4.4-13-4.6z" fill="#e9ecff" stroke="#cdd6f6" stroke-width="1.5"/></g>
+                <path class="tuft" d="M66 31c-2-7 1-12 6-13-1 5 1 9 4 11zM94 31c2-7-1-12-6-13 1 5-1 9-4 11z" fill="#e3e4ff"/>
+                <path class="body" fill="url(#gf-body)" stroke="#cdd6f6" stroke-width="1.5" d="M80 26c-26 0-42 19.5-42 45v51c0 3.6 4.2 5.6 7 3.3l8-6.4 9.4 7.3c2.2 1.7 5.2 1.7 7.4 0L80 119l10.2 7.2c2.2 1.7 5.2 1.7 7.4 0l9.4-7.3 8 6.4c2.8 2.3 7 .3 7-3.3V71c0-25.5-16-45-42-45z"/>
+                <path class="light" fill="url(#gf-light)" d="M80 28c-24 0-39 18-39 42v18c10-22 30-36 56-40 10-1.5 18 0 22 2-4-13-18-22-39-22z"/>
+                <path class="shine" d="M53 52c3.5-9 11-15 20-16.5" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round"/>
+                <g class="eyes-open"><g class="look"><ellipse cx="66" cy="72" rx="7.5" ry="9.5" fill="#1d2a5c"/><ellipse cx="94" cy="72" rx="7.5" ry="9.5" fill="#1d2a5c"/><circle cx="68.8" cy="67.6" r="2.8" fill="#fff"/><circle cx="96.8" cy="67.6" r="2.8" fill="#fff"/><circle cx="63.6" cy="76" r="1.2" fill="#fff" opacity=".7"/><circle cx="91.6" cy="76" r="1.2" fill="#fff" opacity=".7"/></g></g>
+                <g class="eyes-happy" fill="none" stroke="#1d2a5c" stroke-width="4" stroke-linecap="round"><path d="M59 74c3-6 11-6 14 0"/><path d="M87 74c3-6 11-6 14 0"/></g>
+                <g class="brows-focus" fill="none" stroke="#1d2a5c" stroke-width="3" stroke-linecap="round"><path d="M58 58l13 3"/><path d="M102 58l-13 3"/></g>
+                <g class="brows-worried" fill="none" stroke="#1d2a5c" stroke-width="3" stroke-linecap="round"><path d="M59 61l12-4"/><path d="M101 61l-12-4"/></g>
+                <g class="blush" fill="#f4b6dc" opacity=".85"><ellipse cx="55" cy="86" rx="6" ry="3.5"/><ellipse cx="105" cy="86" rx="6" ry="3.5"/></g>
+                <path class="mouth-smile" d="M73 88c4 4.5 10 4.5 14 0" fill="none" stroke="#1d2a5c" stroke-width="3.2" stroke-linecap="round"/>
+                <ellipse class="mouth-o" cx="80" cy="90" rx="4" ry="4.6" fill="#1d2a5c"/>
+                <path class="mouth-worried" d="M73 92c4-4.5 10-4.5 14 0" fill="none" stroke="#1d2a5c" stroke-width="3.2" stroke-linecap="round"/>
+                <path class="mouth-flat" d="M74 90h12" fill="none" stroke="#1d2a5c" stroke-width="3.2" stroke-linecap="round"/>
+                <g class="lens"><circle cx="128" cy="88" r="10" fill="#eaf2fe" fill-opacity=".7" stroke="#1877F2" stroke-width="3.5"/><path d="M135 95l9 9" stroke="#1877F2" stroke-width="5" stroke-linecap="round"/><path d="M123 84c1.5-2 3.5-3 6-3" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"/></g>
+              </g>
+              <path class="ring front" d="M18 112c0 7.7 27.8 14 62 14s62-6.3 62-14" fill="none" stroke="url(#gf-ring)" stroke-width="3" stroke-linecap="round"/>
+              <g class="ticks"><g class="tick t1"><circle cx="52" cy="14" r="7" fill="#e8f7ee"/><path d="M48.5 14l2.5 2.5 4.5-5" fill="none" stroke="#0d7a3c" stroke-width="2.2" stroke-linecap="round"/></g><g class="tick t2"><circle cx="80" cy="8" r="7" fill="#e8f7ee"/><path d="M76.5 8l2.5 2.5 4.5-5" fill="none" stroke="#0d7a3c" stroke-width="2.2" stroke-linecap="round"/></g><g class="tick t3"><circle cx="108" cy="14" r="7" fill="#e8f7ee"/><path d="M104.5 14l2.5 2.5 4.5-5" fill="none" stroke="#0d7a3c" stroke-width="2.2" stroke-linecap="round"/></g></g>
+              <g class="sparkles" fill="#7b5cff">
+                <path d="M134 30l3 7.5 7.5 3-7.5 3-3 7.5-3-7.5-7.5-3 7.5-3z"/>
+                <path d="M24 40l2.2 5.3 5.3 2.2-5.3 2.2-2.2 5.3-2.2-5.3-5.3-2.2 5.3-2.2z"/>
+                <path d="M140 86l1.8 4.2 4.2 1.8-4.2 1.8-1.8 4.2-1.8-4.2-4.2-1.8 4.2-1.8z"/>
+              </g>
+            </svg>
+            <p class="sr-only" id="agent-status" role="status" aria-live="polite"></p>
+          </div>
+          <div class="hero-text">
+            <p class="eyebrow" id="wf-name"></p>
+            <div class="hero-line">
               <h1 id="hero-title">Automation that <span class="hl">adapts</span></h1>
-              <p class="tagline">GhostFlow learns a workflow once, understands it, and recovers when the interface changes.</p>
-              <ul class="capabilities" id="capabilities" aria-label="Capabilities"></ul>
+              <p class="tagline">Replays a learned workflow in a real browser and recovers when the interface changes.</p>
             </div>
-            <div class="hero-art">
-              <svg class="mascot" id="mascot" viewBox="0 0 160 160" role="img" aria-labelledby="mascot-title" data-mood="idle">
-                <title id="mascot-title">GhostFlow mascot</title>
-                <defs>
-                  <linearGradient id="gf-body" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0" stop-color="#ffffff"/><stop offset=".55" stop-color="#f0f3ff"/><stop offset="1" stop-color="#d8d0ff"/>
-                  </linearGradient>
-                  <radialGradient id="gf-light" cx="0.38" cy="0.3" r="0.75">
-                    <stop offset="0" stop-color="#ffffff" stop-opacity=".95"/><stop offset=".6" stop-color="#ffffff" stop-opacity="0"/>
-                  </radialGradient>
-                  <linearGradient id="gf-ring" x1="0" y1="0" x2="1" y2="0">
-                    <stop offset="0" stop-color="#1877F2"/><stop offset="1" stop-color="#8f6bff"/>
-                  </linearGradient>
-                  <radialGradient id="gf-glow" cx="0.5" cy="0.5" r="0.5">
-                    <stop offset="0" stop-color="#8f6bff" stop-opacity=".32"/><stop offset=".55" stop-color="#5ea8ff" stop-opacity=".16"/><stop offset="1" stop-color="#5ea8ff" stop-opacity="0"/>
-                  </radialGradient>
-                </defs>
-                <circle class="aura" cx="80" cy="78" r="78" fill="url(#gf-glow)"/>
-                <ellipse class="shadow" cx="80" cy="146" rx="34" ry="5"/>
-                <ellipse class="ring back" cx="80" cy="112" rx="62" ry="14" fill="none" stroke="url(#gf-ring)" stroke-width="2.5" stroke-opacity=".45"/>
-                <g class="float">
-                  <circle class="glow" cx="80" cy="74" r="56" fill="url(#gf-glow)"/>
-                  <g class="arm arm-l"><path d="M41 86c-9 1-15 6-16 12-.4 2.6 2.2 4 4.3 2.6 4-2.8 8-4.4 13-4.6z" fill="#e9ecff" stroke="#cdd6f6" stroke-width="1.5"/></g>
-                  <g class="arm arm-r"><path d="M119 86c9 1 15 6 16 12 .4 2.6-2.2 4-4.3 2.6-4-2.8-8-4.4-13-4.6z" fill="#e9ecff" stroke="#cdd6f6" stroke-width="1.5"/></g>
-                  <path class="tuft" d="M66 31c-2-7 1-12 6-13-1 5 1 9 4 11zM94 31c2-7-1-12-6-13 1 5-1 9-4 11z" fill="#e3e4ff"/>
-                  <path class="body" fill="url(#gf-body)" stroke="#cdd6f6" stroke-width="1.5" d="M80 26c-26 0-42 19.5-42 45v51c0 3.6 4.2 5.6 7 3.3l8-6.4 9.4 7.3c2.2 1.7 5.2 1.7 7.4 0L80 119l10.2 7.2c2.2 1.7 5.2 1.7 7.4 0l9.4-7.3 8 6.4c2.8 2.3 7 .3 7-3.3V71c0-25.5-16-45-42-45z"/>
-                  <path class="light" fill="url(#gf-light)" d="M80 28c-24 0-39 18-39 42v18c10-22 30-36 56-40 10-1.5 18 0 22 2-4-13-18-22-39-22z"/>
-                  <path class="shine" d="M53 52c3.5-9 11-15 20-16.5" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round"/>
-                  <g class="eyes-open"><g class="look"><ellipse cx="66" cy="72" rx="7.5" ry="9.5" fill="#1d2a5c"/><ellipse cx="94" cy="72" rx="7.5" ry="9.5" fill="#1d2a5c"/><circle cx="68.8" cy="67.6" r="2.8" fill="#fff"/><circle cx="96.8" cy="67.6" r="2.8" fill="#fff"/><circle cx="63.6" cy="76" r="1.2" fill="#fff" opacity=".7"/><circle cx="91.6" cy="76" r="1.2" fill="#fff" opacity=".7"/></g></g>
-                  <g class="eyes-happy" fill="none" stroke="#1d2a5c" stroke-width="4" stroke-linecap="round"><path d="M59 74c3-6 11-6 14 0"/><path d="M87 74c3-6 11-6 14 0"/></g>
-                  <g class="brows-focus" fill="none" stroke="#1d2a5c" stroke-width="3" stroke-linecap="round"><path d="M58 58l13 3"/><path d="M102 58l-13 3"/></g>
-                  <g class="brows-worried" fill="none" stroke="#1d2a5c" stroke-width="3" stroke-linecap="round"><path d="M59 61l12-4"/><path d="M101 61l-12-4"/></g>
-                  <g class="blush" fill="#f4b6dc" opacity=".85"><ellipse cx="55" cy="86" rx="6" ry="3.5"/><ellipse cx="105" cy="86" rx="6" ry="3.5"/></g>
-                  <path class="mouth-smile" d="M73 88c4 4.5 10 4.5 14 0" fill="none" stroke="#1d2a5c" stroke-width="3.2" stroke-linecap="round"/>
-                  <ellipse class="mouth-o" cx="80" cy="90" rx="4" ry="4.6" fill="#1d2a5c"/>
-                  <path class="mouth-worried" d="M73 92c4-4.5 10-4.5 14 0" fill="none" stroke="#1d2a5c" stroke-width="3.2" stroke-linecap="round"/>
-                  <path class="mouth-flat" d="M74 90h12" fill="none" stroke="#1d2a5c" stroke-width="3.2" stroke-linecap="round"/>
-                  <g class="lens"><circle cx="128" cy="88" r="10" fill="#eaf2fe" fill-opacity=".7" stroke="#1877F2" stroke-width="3.5"/><path d="M135 95l9 9" stroke="#1877F2" stroke-width="5" stroke-linecap="round"/><path d="M123 84c1.5-2 3.5-3 6-3" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"/></g>
-                </g>
-                <path class="ring front" d="M18 112c0 7.7 27.8 14 62 14s62-6.3 62-14" fill="none" stroke="url(#gf-ring)" stroke-width="3" stroke-linecap="round"/>
-                <g class="ticks"><g class="tick t1"><circle cx="52" cy="14" r="7" fill="#e8f7ee"/><path d="M48.5 14l2.5 2.5 4.5-5" fill="none" stroke="#0d7a3c" stroke-width="2.2" stroke-linecap="round"/></g><g class="tick t2"><circle cx="80" cy="8" r="7" fill="#e8f7ee"/><path d="M76.5 8l2.5 2.5 4.5-5" fill="none" stroke="#0d7a3c" stroke-width="2.2" stroke-linecap="round"/></g><g class="tick t3"><circle cx="108" cy="14" r="7" fill="#e8f7ee"/><path d="M104.5 14l2.5 2.5 4.5-5" fill="none" stroke="#0d7a3c" stroke-width="2.2" stroke-linecap="round"/></g></g>
-                <g class="sparkles" fill="#7b5cff">
-                  <path d="M134 30l3 7.5 7.5 3-7.5 3-3 7.5-3-7.5-7.5-3 7.5-3z"/>
-                  <path d="M24 40l2.2 5.3 5.3 2.2-5.3 2.2-2.2 5.3-2.2-5.3-5.3-2.2 5.3-2.2z"/>
-                  <path d="M140 86l1.8 4.2 4.2 1.8-4.2 1.8-1.8 4.2-1.8-4.2-4.2-1.8 4.2-1.8z"/>
-                </g>
-              </svg>
-              <p class="mascot-say" id="mascot-say" aria-hidden="true"></p>
-              <p class="sr-only" id="agent-status" role="status" aria-live="polite"></p>
+            <div class="hero-meta">
+              <ul class="prov-row" id="prov-row" aria-label="Where the AI came from"></ul>
+              <button type="button" id="replay" class="btn primary small" hidden>Replay evidence</button>
             </div>
-          </section>
-          <section class="card how" aria-labelledby="how-title">
-            <h2 id="how-title">How it works</h2>
-            <p>GhostFlow replays a learned workflow. When a recorded element is gone, an AI advisor proposes an equivalent and GhostFlow verifies it before acting.</p>
-            <button type="button" id="replay" class="btn primary wide" hidden>Replay evidence</button>
-            <p class="how-meta" id="how-meta"></p>
-          </section>
-        </div>
+          </div>
+        </section>
 
-        <ol class="card stepper" id="flow" aria-label="Pages of the workflow"></ol>
-
-        <div class="main-grid">
-          <section class="card scenario-card" aria-labelledby="sc-title">
+        <section class="scenario-card" aria-labelledby="sc-title">
             <div class="sc-head">
-              <svg class="brand-mark sc-mark" viewBox="0 0 32 32" aria-hidden="true" focusable="false">
-                <rect class="bm-bg" width="32" height="32" rx="9"/>
-                <path class="bm-body" d="M16 6.5c-4.6 0-7.6 3.4-7.6 8v9.4c0 .7.8 1.1 1.4.7l1.6-1.2 1.8 1.4c.4.3 1 .3 1.4 0L16 23.4l1.4 1.4c.4.3 1 .3 1.4 0l1.8-1.4 1.6 1.2c.6.4 1.4 0 1.4-.7v-9.4c0-4.6-3-8-7.6-8z"/>
-                <ellipse class="bm-eye" cx="13.4" cy="15" rx="1.4" ry="1.8"/><ellipse class="bm-eye" cx="18.6" cy="15" rx="1.4" ry="1.8"/>
-              </svg>
-              <div class="sc-text">
-                <h2 id="sc-title"></h2>
-                <p id="sc-sub"></p>
-              </div>
+              <h2 id="sc-title"></h2>
               <div class="result" id="result-summary"></div>
             </div>
+            <ol class="stepper" id="flow" aria-label="Pages of the workflow"></ol>
             <div class="sc-body">
-              <ol class="pages" id="steps" aria-label="Steps by page"></ol>
-              <div class="stage-col">
-                <div class="stage-tools">
-                  <span class="prov" id="stage-prov"></span>
-                  <div class="view-toggle" id="view-toggle" role="group" aria-label="Browser view" hidden>
-                    <button type="button" id="show-capture" aria-pressed="true">Real capture</button>
-                    <button type="button" id="show-reconstructed" aria-pressed="false">Reconstructed</button>
-                  </div>
-                </div>
+              <div class="stage-slot" id="stage-slot">
+              <p class="stage-away" id="stage-away" hidden>The browser is shown in the expanded view.</p>
+              <div class="stage-col" id="stage-col">
                 <div class="browser">
-                  <div class="browser-bar" aria-hidden="true"><i></i><i></i><i></i><span class="address" id="address"></span></div>
+                  <div class="browser-bar">
+                    <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
+                    <span class="prov" id="stage-prov"></span>
+                    <span class="address" id="address"></span>
+                    <div class="view-toggle" id="view-toggle" role="group" aria-label="Browser view" hidden>
+                      <button type="button" id="show-capture" aria-pressed="true">Real capture</button>
+                      <button type="button" id="show-reconstructed" aria-pressed="false">Reconstructed</button>
+                    </div>
+                    <button type="button" class="btn ghost small expand-btn" id="expand-browser" aria-haspopup="dialog" aria-controls="browser-dialog" aria-label="Expand browser"><span aria-hidden="true">⤢</span> <span class="xb-label" aria-hidden="true">Expand browser</span></button>
+                  </div>
                   <figure class="shot" id="shot" hidden>
                     <div class="shot-frame" id="shot-frame"></div>
                     <figcaption class="shot-note" id="shot-note"></figcaption>
@@ -167,13 +149,17 @@
                 <ol class="film" id="film" aria-label="Browser captures of this scenario" hidden></ol>
                 <ul class="events" id="events" aria-label="What happened"></ul>
               </div>
+              </div>
+              <aside class="sc-side" aria-label="GhostFlow status, recovery and verification">
+                <div class="panel status-panel">
+                  <p class="agent" id="agent" data-mood="idle" aria-hidden="true"><span class="agent-k">GhostFlow</span><strong class="mascot-say" id="mascot-say"></strong></p>
+                  <section class="heal" id="heal-summary" aria-labelledby="heal-summary-title"></section>
+                  <section class="verifs" id="verifs" aria-labelledby="verifs-title"></section>
+                </div>
+                <ol class="pages" id="steps" aria-label="Steps by page"></ol>
+              </aside>
             </div>
-            <div class="verifs" id="verifs"></div>
-          </section>
-          <section class="card heal" id="heal-summary" aria-labelledby="heal-summary-title"></section>
-        </div>
-
-        <section class="card understand" id="understand" aria-labelledby="understand-title"></section>
+        </section>
       </section>
 
       <section id="dev-view" role="tabpanel" aria-labelledby="tab-dev" hidden>
@@ -190,6 +176,9 @@
             <section class="card" aria-labelledby="intel-title">
               <div class="card-head"><h2 id="intel-title">Meta Intelligence</h2><span id="intel-badge"></span></div>
               <div id="intel"></div>
+              <h3 id="prov-detail-title">AI provenance by stage</h3>
+              <div class="prov-stages" id="prov-stages" aria-labelledby="prov-detail-title"></div>
+              <p class="prov-note" id="prov-note"></p>
             </section>
             <section class="card" aria-labelledby="evidence-title">
               <div class="card-head"><h2 id="evidence-title">Verifiable evidence</h2></div>
@@ -202,5 +191,39 @@
     <p class="empty-state" id="empty" hidden></p>
   </div>
   <footer class="foot" id="source-hint"></footer>
+
+  <!-- Expanded browser: the same viewer moves in here, so captures stay in sync; nothing is copied or upscaled. -->
+  <dialog class="browser-dialog" id="browser-dialog" aria-labelledby="xb-title" aria-describedby="xb-keys">
+    <div class="xb-head">
+      <div class="xb-heading">
+        <h2 id="xb-title">Expanded browser</h2>
+        <p class="xb-progress" id="xb-progress"></p>
+      </div>
+      <div class="xb-nav">
+        <button type="button" class="btn ghost small" id="xb-prev" aria-label="Previous step">← Prev</button>
+        <button type="button" class="btn ghost small" id="xb-next" aria-label="Next step">Next →</button>
+        <button type="button" class="btn primary small" id="xb-close">Exit expanded view</button>
+      </div>
+      <ol class="xb-dots" id="xb-dots" aria-hidden="true"></ol>
+      <p class="sr-only" id="xb-keys">Left and Right arrows move between steps. Escape returns to the normal layout.</p>
+    </div>
+    <div class="xb-body">
+      <div class="xb-main" id="xb-main"></div>
+      <aside class="xb-side" aria-label="Agent, provenance and events">
+        <div class="xb-agent" id="xb-agent">
+          <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true" focusable="false">
+            <rect class="bm-bg" width="32" height="32" rx="9"/>
+            <path class="bm-body" d="M16 6.5c-4.6 0-7.6 3.4-7.6 8v9.4c0 .7.8 1.1 1.4.7l1.6-1.2 1.8 1.4c.4.3 1 .3 1.4 0L16 23.4l1.4 1.4c.4.3 1 .3 1.4 0l1.8-1.4 1.6 1.2c.6.4 1.4 0 1.4-.7v-9.4c0-4.6-3-8-7.6-8z"/>
+            <ellipse class="bm-eye" cx="13.4" cy="15" rx="1.4" ry="1.8"/><ellipse class="bm-eye" cx="18.6" cy="15" rx="1.4" ry="1.8"/>
+          </svg>
+          <p><span class="xb-k">GhostFlow</span><strong id="xb-agent-label"></strong></p>
+          <p class="sr-only" id="xb-status" role="status" aria-live="polite"></p>
+        </div>
+        <div class="xb-prov" id="xb-prov"></div>
+        <div class="xb-events" id="xb-events"></div>
+        <div class="xb-film" id="xb-film"></div>
+      </aside>
+    </div>
+  </dialog>
 </body>
 </html>

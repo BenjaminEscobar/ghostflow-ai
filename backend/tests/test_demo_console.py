@@ -517,7 +517,7 @@ def test_demo_view_never_presents_reconstruction_as_live_or_as_a_screenshot():
     assert "Reconstructed from saved evidence · not a screenshot" in js
     assert "Live from the demo runner · Chromium runs headless by default" in js
     assert "REPLAY of saved evidence · not a live execution" in js
-    assert "when the workflow was compiled (GF-002)" in js and "separate execution with its own provenance" in js
+    assert "when the workflow was compiled (GF-002)" in js and "Two independent AI stages, not one execution" in js
     assert re.search(r"Math\.random|Date\.now\(\)", js) is None  # no invented timings or values
     # Current backend settings are never confused with the recorded results of the selected evidence.
     assert "Current backend settings" in js and "Recorded recovery · selected evidence" in js

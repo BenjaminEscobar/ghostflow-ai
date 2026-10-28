@@ -191,23 +191,24 @@ def test_demo_and_developer_views_are_usable_on_desktop_and_tablet(console_url, 
             # Demo view first: one story, real data, honest labels.
             expect(page.locator("#demo-view")).to_be_visible()
             expect(page.locator("#dev-view")).to_be_hidden()
-            expect(page.locator("#capabilities")).to_contain_text("Recovered s6 in scenario C")
+            expect(page.locator(".scenario.recovered")).to_contain_text("Recovered s6")
             expect(page.locator("#stage-caption")).to_contain_text("not a screenshot")
             expect(page.locator("#address")).to_have_text("http://localhost:8080/dashboard.html")
             expect(page.locator("#action")).to_contain_text("Crear requerimiento")
-            expect(page.locator("#heal-summary")).to_contain_text("10/10 deterministic checks passed")
-            expect(page.locator("#heal-summary")).to_contain_text("Real · Meta muse-spark-1.3")
-            expect(page.locator("#understand")).to_contain_text("No AI interpretation stored")
-            expect(page.locator("#understand")).to_contain_text("independent of the interpretation (GF-002)")
+            expect(page.locator("#heal-summary")).to_contain_text("10/10 passed")
+            expect(page.locator("#heal-summary")).to_contain_text("Meta Muse Spark · recorded · 1 request")
+            expect(page.locator("#prov-row")).to_contain_text("Interpretation · None")
+            expect(page.locator("#prov-row")).to_contain_text("Recovery · Meta real · recorded")
             expect(page.locator("#system-status")).to_contain_text("Current backend settings")
             expect(page.locator("#heal-summary")).to_contain_text("Recorded recovery")
             expect(page.locator("#mascot")).to_have_attribute("data-mood", "proud")
             expect(page.locator("#page")).to_contain_text("Crear requerimiento")
             expect(page.locator("#events")).to_contain_text("Recorded element not found")
 
-            # Layout: nothing squeezed into a sliver (no vertical text) and the mascot stays prominent.
+            # Layout: nothing squeezed into a sliver (no vertical text); the mascot stays visible beside
+            # the title, compact so that the browser comes first (final Demo refinement).
             assert page.evaluate(SQUEEZED_TEXT_JS) == []
-            assert page.locator("#mascot").bounding_box()["width"] >= 140
+            assert page.locator("#mascot").bounding_box()["width"] >= 70
 
             # Keyboard: arrows move between scenario tabs; the mascot reacts to the failure.
             page.locator('.scenario[aria-selected="true"]').focus()
@@ -231,6 +232,7 @@ def test_demo_and_developer_views_are_usable_on_desktop_and_tablet(console_url, 
             expect(page.locator("#tab-dev")).to_have_attribute("aria-selected", "true")
             expect(page.locator("#dev-view")).to_be_visible()
             expect(page.locator("#healing")).to_contain_text("Recorded locators exhausted (4)")
+            expect(page.locator("#intel")).to_contain_text("independent of the interpretation (GF-002)")
             assert "view=developer" in page.url
             assert page.evaluate(SQUEEZED_TEXT_JS) == []
             assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth + 1")

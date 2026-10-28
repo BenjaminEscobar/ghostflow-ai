@@ -85,6 +85,8 @@ const state = {
   moments: [], // live runs: observed events still to show, in order
   moment: null, // {sc, idx, mood} being shown
   lastMood: null,
+  expanded: false, // the browser is shown in the expanded dialog
+  at: null, // {idx, count}: the step in focus, for the expanded view's progress and arrows
   error: null,
   timers: { live: null, replay: null },
 };
@@ -134,6 +136,9 @@ const utc = (iso) => (iso ? `${iso.replace("T", " ").slice(0, 16)} UTC` : "—")
 const fmtMs = (ms) => (ms < 1000 ? `${ms} ms` : `${(ms / 1000).toFixed(1)} s`);
 const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
 const cleanTitle = (sc) => sc.title.replace(/^[A-Z]\d* · /, "");
+// Brief scenario titles from the scenario's own facts; the full stored title stays as a tooltip.
+const shortTitle = (sc) => (sc.portal === "original" ? "Original"
+  : sc.portal && sc.portal !== "configured origin" ? "Changed UI" : cleanTitle(sc));
 
 function elementName(description) {
   const m = /"([^"]+)"/.exec(description || "");
@@ -148,15 +153,15 @@ function inputValue(sc, name) {
 }
 
 function scenarioOutcome(sc) {
-  if (replaying(sc)) return { cls: "running", text: "Replaying saved evidence…" };
-  if (sc.state === "pending") return { cls: "pending", text: "Pending" };
-  if (sc.state === "running") return { cls: "running", text: "Running…" };
-  if (sc.state === "interrupted") return { cls: "error", text: "Interrupted" };
-  if (sc.status === "passed" && recoveredSteps(sc).length) return { cls: "recovered", text: `Recovered ${recoveredSteps(sc).map((s) => s.id).join(", ")} · completed` };
-  if (sc.status === "passed") return { cls: "passed", text: "Completed" };
+  if (replaying(sc)) return { cls: "running", text: "Replaying saved evidence…", brief: "Replaying…" };
+  if (sc.state === "pending") return { cls: "pending", text: "Pending", brief: "Pending" };
+  if (sc.state === "running") return { cls: "running", text: "Running…", brief: "Running…" };
+  if (sc.state === "interrupted") return { cls: "error", text: "Interrupted", brief: "Interrupted" };
+  if (sc.status === "passed" && recoveredSteps(sc).length) return { cls: "recovered", text: `Recovered ${recoveredSteps(sc).map((s) => s.id).join(", ")} · completed`, brief: "Recovered" };
+  if (sc.status === "passed") return { cls: "passed", text: "Completed", brief: "Completed" };
   const failed = sc.steps.find((s) => s.state === "failed");
-  if (sc.status === "failed") return { cls: "failed", text: failed ? `Failed at ${failed.id}` : "Failed" };
-  return { cls: "error", text: "Error" };
+  if (sc.status === "failed") return { cls: "failed", text: failed ? `Failed at ${failed.id}` : "Failed", brief: failed ? "Stopped safely" : "Failed" };
+  return { cls: "error", text: "Error", brief: "Error" };
 }
 
 // Replay rewrites step states up to a cursor; live and saved views use the stored ones.
@@ -216,8 +221,7 @@ function pageGroups(steps) {
     const st = has("failed") ? "failed" : has("running") ? "running" : has("recovered") ? "recovered"
       : ss.every((s) => s.state === "completed") ? "completed" : ss.every((s) => s.state === "skipped") ? "skipped"
         : has("completed") ? "running" : "pending";
-    const timed = ss.filter((s) => s.duration_ms !== null && s.duration_ms !== undefined && s.state !== "pending");
-    return { ...g, steps: ss, state: st, ms: timed.length ? timed.reduce((t, s) => t + s.duration_ms, 0) : null, name: pageName(g.where), path: pathOf(g.where) };
+    return { ...g, steps: ss, state: st, name: pageName(g.where), path: pathOf(g.where) };
   });
 }
 
@@ -280,6 +284,17 @@ function pin(i) {
   render();
 }
 
+function stepBy(delta) {
+  if (!state.at || !scenario()) return;
+  const i = state.at.idx + delta;
+  if (i < 0 || i >= state.at.count) return;
+  stopReplay();
+  clearMoments();
+  state.pinned = i;
+  state.shot = null;
+  render();
+}
+
 // -- header, sidebar, badges ------------------------------------------------------------------
 
 function renderSystem() {
@@ -320,6 +335,8 @@ function renderContext() {
   const signature = JSON.stringify(d ? [d.presentation, d.ai_badge] : null);
   if ($("badges").dataset.signature !== signature) {
     $("badges").dataset.signature = signature;
+    // The recovery badge is scoped to its stage ("Recovery · …"); the interpretation has its own
+    // chip in the Demo view, so no single label speaks for all of the AI.
     fill($("badges"), d ? [badge(d.presentation.mode, d.presentation.text, d.presentation.mode === "live"), badge(d.ai_badge.kind, d.ai_badge.text)] : []);
   }
   $("replay").hidden = !(d && !isLive() && sc && sc.state === "finished");
@@ -340,7 +357,8 @@ function renderScenarios() {
     const selected = sc.key === current;
     const btn = el("button", { type: "button", class: `scenario ${o.cls}`, role: "tab", "aria-selected": selected ? "true" : "false", tabindex: selected ? "0" : "-1", "data-key": sc.key, "data-focus-key": `scenario-${sc.key}` },
       el("span", { class: "avatar", "aria-hidden": "true" }, sc.key),
-      el("span", { class: "key" }, `Scenario ${sc.key}`), el("span", { class: "title" }, cleanTitle(sc)), el("span", { class: "st" }, o.text));
+      el("span", { class: "key sr-only" }, `Scenario ${sc.key} · `), el("span", { class: "title", title: cleanTitle(sc) }, shortTitle(sc)),
+      el("span", { class: "st" }, o.brief, o.text !== o.brief ? el("span", { class: "sr-only" }, ` (${o.text})`) : null));
     btn.addEventListener("click", () => chooseScenario(sc.key));
     return btn;
   }));
@@ -358,27 +376,11 @@ function chooseScenario(key) {
 
 // -- demo view ---------------------------------------------------------------------------
 
+// Capabilities and "How it works" left the Demo view: the browser comes first.
 function renderHero() {
-  const b = bundle();
-  const w = b.workflow;
-  $("wf-name").textContent = `Learned workflow · ${w.name}`;
-  const recovered = b.scenarios.map((sc) => ({ sc, step: sc.steps.find((s) => s.recovery && s.recovery.outcome === "recovered") })).find((x) => x.step);
-  const attempted = b.scenarios.some((sc) => sc.steps.some((s) => s.recovery));
-  const ib = state.detail.interpretation_badge;
-  const cap = (cls, ico, k, s) => el("li", { class: `cap ${cls}` }, el("span", { class: "ico", "aria-hidden": "true" }, ico), el("span", { class: "k" }, k), el("span", { class: "s" }, s));
-  fill($("capabilities"),
-    cap("learn", "◉", "Learns", `${plural(w.steps.length, "step")} · ${plural(w.inputs.length, "parameter")}`),
-    cap("understand", "✦", "Understands", ib.kind === "real" ? "With Meta Muse Spark" : ib.kind === "simulated" ? "Simulated interpretation" : "No interpretation stored"),
-    cap("recover", "↺", "Recovers", recovered ? `Recovered ${recovered.step.id} in scenario ${recovered.sc.key}` : attempted ? "Recovery attempted, not applied" : "No recovery in this evidence"));
-}
-
-function renderHow() {
-  const sc = scenario();
-  const ms = sc && sc.started_at && sc.finished_at ? Date.parse(sc.finished_at) - Date.parse(sc.started_at) : null;
-  fill($("how-meta"),
-    isLive() ? el("span", { class: "muted" }, "● A live run is in progress; this page follows the demo runner.")
-      : ms !== null && sc.state === "finished" ? el("span", { class: "muted" }, `⏱ Scenario ${sc.key} took ${fmtMs(ms)} in this run.`)
-        : el("span", { class: "muted" }, "Run timing is not stored in this evidence."));
+  const w = bundle().workflow;
+  $("wf-name").textContent = `Learned workflow · ${w.name} · ${plural(w.steps.length, "step")}`;
+  renderProvRow();
 }
 
 function renderFlow(groups, focusGroup) {
@@ -389,7 +391,7 @@ function renderFlow(groups, focusGroup) {
       "aria-label": `Page ${gi + 1}: ${g.name} · ${STATE_TEXT[g.state]}`, "aria-current": gi === focusGroup ? "step" : null, title: g.path, "data-focus-key": `page-${gi}`,
     },
     el("span", { class: "dotn", "aria-hidden": "true" }, mark),
-    el("span", { class: "nl" }, el("strong", {}, g.name), el("small", {}, `${plural(g.steps.length, "step")}${g.ms !== null ? ` · ${fmtMs(g.ms)}` : ""}`)));
+    el("span", { class: "nl" }, el("strong", {}, g.name)));
     node.addEventListener("click", () => pin(g.idx[0]));
     return el("li", { class: g.state === "completed" || g.state === "recovered" ? "done" : "" }, node);
   }));
@@ -399,8 +401,7 @@ function renderStepList(steps, groups, idx) {
   fill($("steps"), groups.map((g, gi) => el("li", { class: `pg ${g.state}` },
     el("div", { class: "pg-head" },
       el("span", { class: "dotn", "aria-hidden": "true" }, { completed: "✓", failed: "!", recovered: "★" }[g.state] || String(gi + 1)),
-      el("div", {}, el("strong", {}, g.name), el("small", {}, g.path)),
-      el("span", { class: "dur" }, g.ms !== null ? fmtMs(g.ms) : "")),
+      el("div", {}, el("strong", {}, g.name), el("small", {}, g.path))),
     el("ul", { class: "srows" }, g.idx.map((i) => {
       const s = steps[i];
       const row = el("button", { type: "button", class: `srow ${s.state}${i === idx ? " focus" : ""}`, "aria-current": i === idx ? "step" : null, title: `${s.id} · ${s.label || s.action}`, "data-focus-key": `step-${s.id}` },
@@ -455,7 +456,7 @@ function renderAction(sc, steps, idx) {
       ? el("div", { class: "swap" }, el("span", { class: "old" }, name), el("span", { class: "arrow", "aria-hidden": "true" }, "→"), el("span", { class: "new" }, r.proposed.name || r.proposed.id))
       : el("div", { class: "target" }, name),
     el("span", { class: `state-chip ${chip[0]}` }, chip[1]),
-    el("div", { class: "meta" }, `Step ${idx + 1} of ${steps.length} · ${step.id}${step.duration_ms !== null && step.duration_ms !== undefined && step.state !== "pending" ? ` · ${fmtMs(step.duration_ms)}` : ""}`),
+    el("div", { class: "meta" }, `Step ${idx + 1} of ${steps.length} · ${step.id}`),
     step.state === "failed" ? el("p", { class: "note" }, r && r.outcome === "skipped" ? "Every recorded locator failed and self-healing is off: GhostFlow stopped instead of guessing." : (step.error || "The step failed.")) : null,
     sc.status === "error" && sc.error ? el("p", { class: "note err" }, sc.error) : null);
 }
@@ -498,33 +499,35 @@ function renderScenarioHead(sc) {
   const o = scenarioOutcome(sc);
   const done = replayDone(sc) && sc.state === "finished";
   const issue = reviewIssue(sc);
-  const heal = healingStep(sc);
-  const r = heal && heal.recovery;
-  fill($("sc-title"), `Scenario ${sc.key} — ${cleanTitle(sc)}`);
-  const failed = sc.steps.find((s) => s.state === "failed");
-  $("sc-sub").textContent = !done ? (replaying(sc) ? "Replaying the saved steps one by one." : "The run is in progress.")
-    : sc.status === "error" ? "The run stopped with an execution error before finishing."
-      : o.cls === "recovered" ? `A recorded element was not found; GhostFlow recovered ${recoveredSteps(sc).map((s) => s.id).join(", ")} and completed the workflow.`
-        : sc.status === "failed" && r && r.outcome === "skipped" ? `A recorded element was not found at ${failed ? failed.id : "a step"} and self-healing was off: GhostFlow stopped safely.`
-          : sc.status === "failed" ? (issue || `The run stopped safely${failed ? ` at ${failed.id}` : ""}.`)
-            : "Every element was found with its recorded locators.";
-
-  const cls = { passed: "ok", recovered: "heal", failed: "fail", error: "fail" }[o.cls] || "muted";
+  fill($("sc-title"), `Scenario ${sc.key} — ${shortTitle(sc)}`,
+    typeof sc.healing === "boolean" ? el("span", { class: "sc-mode" }, ` · self-healing ${sc.healing ? "on" : "off"}`) : null);
+  const cls = { passed: "ok", recovered: "ok", failed: "fail", error: "fail" }[o.cls] || "muted";
   const text = !done ? (replaying(sc) ? "Replaying…" : o.text) : issue || (sc.status === "failed" ? `Stopped safely · ${o.text.toLowerCase()}` : o.text);
   const ms = sc.started_at && sc.finished_at ? Date.parse(sc.finished_at) - Date.parse(sc.started_at) : null;
   const d = state.detail;
-  const metric = (k, v) => el("div", { class: "metric" }, el("span", {}, k), el("strong", {}, v));
+  const metric = (k, v) => el("span", { class: "metric" }, `${k} `, el("strong", {}, v));
   fill($("result-summary"),
     el("span", { class: `status-chip ${done ? cls : "muted"}` }, text),
-    el("div", { class: "metrics" },
-      metric("Total time", done && ms !== null ? fmtMs(ms) : "—"),
-      metric("AI advisor", r && r.consulted_model ? (r.provider === "meta" ? "Real Meta" : "Simulated") : "Not used"),
-      metric("Workflow DSL", d.workflow_unchanged === true ? "Unchanged" : d.workflow_unchanged === false ? "Changed" : "Pending")));
+    metric("Total time", done && ms !== null ? fmtMs(ms) : "—"),
+    metric("Workflow", d.workflow_unchanged === true ? "Unchanged" : d.workflow_unchanged === false ? "Changed" : "Pending"));
+  renderVerification(sc, done);
+}
 
+// The workflow's own final checks, as the evidence recorded them (every detail is in Developer).
+const verifyText = (t) => (/^(?:text_visible|url_path): \w+=(.+)$/.exec(t) || [])[1] || t;
+function renderVerification(sc, done) {
   const verif = done ? sc.verifications : [];
-  fill($("verifs"), verif.length ? [el("strong", {}, "Final checks"), ...verif.map((v) => el("span", {},
-    el("span", { class: v.status === "passed" ? "ok-text" : v.status === "failed" ? "fail-text" : "muted" }, v.status === "passed" ? "✓ " : v.status === "failed" ? "✕ " : "– "),
-    bundle().workflow.verify[v.index] || v.type, v.status === "skipped" ? " (not run)" : ""))] : []);
+  if (!verif.length) return fill($("verifs"));
+  const passed = verif.filter((v) => v.status === "passed").length;
+  const ran = verif.some((v) => v.status !== "skipped");
+  const [cls, text] = !ran ? ["muted", "Not run"] : [passed === verif.length ? "ok" : "fail", `${passed}/${verif.length} passed`];
+  const ICON = { passed: "✓", failed: "✕" };
+  fill($("verifs"),
+    el("div", { class: "summary-head" }, el("h3", { id: "verifs-title" }, "Verification"), el("span", { class: `status-chip ${cls}` }, text)),
+    el("ul", { class: "verif-list" }, verif.map((v) => el("li", { class: v.status },
+      el("span", { class: "ic", "aria-hidden": "true" }, ICON[v.status] || "–"),
+      el("span", { class: "vt" }, verifyText(bundle().workflow.verify[v.index] || v.type), v.status === "skipped" ? " (not run)" : "",
+        el("span", { class: "sr-only" }, ` · ${v.status}`))))));
 }
 
 function renderStage() {
@@ -535,6 +538,7 @@ function renderStage() {
   const idx = focusIndex(sc, steps);
   const groups = pageGroups(steps);
   const gi = Math.max(0, groups.findIndex((g) => g.idx.includes(idx)));
+  state.at = { idx, count: steps.length };
 
   renderFlow(groups, gi);
   renderScenarioHead(sc);
@@ -544,6 +548,7 @@ function renderStage() {
   renderEvents(sc, steps);
   const shown = renderCapture(sc, steps, idx);
   if (!shown) $("address").textContent = locationAt(steps, idx, b) || "—";
+  $("address").title = $("address").textContent; // the full address when the bar truncates it
   $("stage-caption").textContent = shown
     ? (isLive() ? (momentOf(sc) ? `Live capture · just observed at step ${steps[idx].id}, the run continues`
       : "Live capture · real screenshot of the Chromium page GhostFlow controls, updated as the run progresses")
@@ -559,6 +564,7 @@ function renderStage() {
   const mood = issue ? moodFor(sc, steps[idx]) : moment ? moment.mood : moodFor(sc, steps[idx]);
   const label = issue || (moment ? MOMENT_LABEL[mood] : MOOD_LABEL[mood]);
   $("mascot").setAttribute("data-mood", mood);
+  $("agent").setAttribute("data-mood", mood);
   $("mascot-title").textContent = `GhostFlow mascot: ${issue || moment ? label.toLowerCase() : MOOD_TEXT[mood]}`;
   $("mascot-say").textContent = label;
   if (state.lastMood !== mood) {
@@ -566,7 +572,8 @@ function renderStage() {
   }
   if (state.lastAgentLabel !== label) { // announce actual status changes once, not every poll
     state.lastAgentLabel = label;
-    $("agent-status").textContent = `GhostFlow: ${label}`;
+    // While the dialog is open the page behind it is inert: announce from inside the dialog.
+    $(state.expanded ? "xb-status" : "agent-status").textContent = `GhostFlow: ${label}`;
   }
 }
 
@@ -708,6 +715,10 @@ function renderCapture(sc, steps, idx) {
       : own && step.state === "failed" ? "Recorded element not found here · stopped safely without acting"
         : "Recorded element not found on this page")
     : c.phase === "final" ? (sc.status === "passed" ? "Final page after the verifications" : reviewIssue(sc) || "Page where the run stopped safely") : null;
+  if (c.width && c.height) {
+    $("shot-frame").style.setProperty("--shot-w", `${c.width}px`);
+    $("shot-frame").style.setProperty("--shot-ratio", String(c.width / c.height));
+  }
   fill($("shot-frame"),
     captureImage(c, "full"),
     c.box && step && c.step_id === step.id ? el("span", {
@@ -752,74 +763,51 @@ function renderFilm(sc, current) {
   }));
 }
 
+// Recovery, beside the browser: what was missing, what GhostFlow chose, whether its checks passed
+// and where the proposal came from. Candidates, latency, tokens and hashes stay in Developer.
 function renderHealSummary() {
   const sc = scenario();
   const box = $("heal-summary");
-  const title = el("h2", { id: "heal-summary-title" }, "Self-Healing with AI");
+  const title = el("h2", { id: "heal-summary-title" }, "Recovery");
+  const head = (cls, text) => el("div", { class: "summary-head" }, title, el("span", { class: `status-chip ${cls}` }, text));
   if (!sc) return fill(box, el("div", { class: "summary-head" }, title));
   const target = healingStep(sc);
   const steps = visibleSteps(sc);
   const idx = target ? sc.steps.indexOf(target) : -1;
   const reached = target && reachedStep(sc, idx);
-  const auditLink = el("button", { type: "button", class: "link-btn" }, "Open the full audit in Developer view");
-  // What this card shows is the selected evidence, not the current backend settings in the header.
-  const origin = el("p", { class: "eyebrow-s" }, isLive() ? `Live recovery · this run, scenario ${sc.key}` : `Recorded recovery · selected evidence, scenario ${sc.key}`);
-  auditLink.addEventListener("click", () => setView("developer"));
-  const original = (t, r) => [
-    el("div", { class: "lbl-fail" }, "Original element (not found)"),
-    el("div", { class: "codebox" }, t.target || t.label || t.id, r && r.exhausted_strategies.length ? el("small", {}, `${plural(r.exhausted_strategies.length, "recorded locator")} exhausted`) : null),
-  ];
+  const stage = recoveryStage(bundle(), sc);
+  const fact = (k, ...v) => [el("dt", {}, k), el("dd", {}, ...v)];
+  const facts = (...rows) => el("dl", { class: "facts" }, rows.flat());
+  const source = () => fact("Source", stage.source);
 
   if (!target) {
-    const msg = sc.status === "error" ? "The run stopped before self-healing was relevant."
-      : sc.state === "finished" ? "Not needed in this scenario: every element was found with its recorded locators, so the AI was not consulted." : "Waiting for the run…";
-    return fill(box, el("div", { class: "summary-head" }, title, el("span", { class: "badge none" }, sc.healing ? "Enabled" : "Off")),
-      el("p", { class: "eyebrow-s" }, isLive() ? `Live run · scenario ${sc.key}` : `Recorded result · selected evidence, scenario ${sc.key}`), el("p", { class: "explain" }, msg));
+    const [cls, text, msg] = sc.status === "error" ? ["fail", "Not reached", "The run stopped before a recovery was relevant."]
+      : sc.state !== "finished" ? (sc.healing ? ["muted", "Standing by", "GhostFlow recovers only if a recorded element goes missing."] : ["muted", "Self-healing off", "Self-healing is off in this scenario."])
+        : ["ok", "Not needed", "No recovery needed: every recorded element was found."];
+    return fill(box, head(cls, text), el("p", { class: "explain" }, msg), sc.state !== "finished" && sc.healing ? facts(source()) : null);
   }
+  const original = fact("Original", el("s", {}, elementName(target.target || target.label)), el("span", { class: "miss" }, " · not found"));
   const r = target.recovery;
   if (!r || (steps[idx].phase && !reached)) {
-    return fill(box, el("div", { class: "summary-head" }, title, el("span", { class: "chip rec" }, "In progress")), origin,
-      el("p", { class: "explain" }, steps[idx].phase === "evaluating" ? "Playback of the recorded deterministic checks." : "Recovery in progress. The outcome appears here when GhostFlow's checks finish."),
-      el("div", { class: "col" }, original(target, r), el("div", { class: "down", "aria-hidden": "true" }, "↓"), el("div", { class: "lbl-blue" }, "Searching for an equivalent…")));
+    return fill(box, head("active", "In progress"), facts(original,
+      fact("Selected", el("span", { class: "muted" }, steps[idx].phase === "evaluating" ? "Playback of the recorded checks" : "Searching for an equivalent…")), source()));
   }
-  if (!reached) return fill(box, el("div", { class: "summary-head" }, title), origin, el("p", { class: "explain" }, `Replay in progress · step ${target.id} not reached yet.`));
+  if (!reached) return fill(box, head("muted", "Replay"), el("p", { class: "explain" }, `Replay in progress · step ${target.id} not reached yet.`), facts(source()));
 
   const recovered = r.outcome === "recovered";
-  const real = r.provider === "meta";
   const passed = r.validation.filter((c) => c.passed).length;
-  const levels = ["low", "medium", "high"];
-  const advisor = real ? "Meta Muse Spark" : "The offline mock (simulated)";
-  const explain = recovered ? `The recorded element was not found. ${advisor} chose an equivalent and GhostFlow verified it before acting once.`
-    : r.outcome === "skipped" ? "The recorded element was not found and self-healing was off for this scenario, so GhostFlow stopped instead of guessing."
-      : r.outcome === "error" ? "Recovery ended with an error. Review the outcome before retrying."
-        : `The proposal was ${r.outcome}; GhostFlow stopped safely instead of acting.`;
-  const alternatives = r.candidates && r.candidates.length
-    ? [el("div", { class: "lbl-blue" }, `Alternatives on the page (${r.candidates.length})`),
-      el("ul", { class: "cand-list" }, r.candidates.map((c) => {
-        const chosen = recovered && r.proposed && r.proposed.id === c.id;
-        return el("li", { class: chosen ? "chosen" : "" }, el("span", { class: "cid" }, c.id), el("span", { class: "cn" }, c.name || "(no name)"), chosen ? el("span", { class: "pick" }, "✓ Selected") : el("span", {}));
-      }))]
-    : r.consulted_model
-      ? [el("div", { class: "lbl-blue" }, recovered && r.proposed ? `Chosen: ${r.proposed.name || r.proposed.id}` : "Alternatives"),
-        el("p", { class: "note" }, `${plural(r.candidates_considered || 0, "candidate")} examined (this evidence did not store the list).`)]
-      : [el("div", { class: "lbl-blue" }, "Alternatives"), el("p", { class: "note" }, "Not searched: the AI was not consulted.")];
-  fill(box,
-    el("div", { class: "summary-head" }, title, r.consulted_model ? badge(real ? "real" : "simulated", real ? "Real" : "Mock") : badge("none", "Off")),
-    origin,
-    el("p", { class: "explain" }, explain),
-    el("div", { class: "col" }, original(target, r), el("div", { class: "down", "aria-hidden": "true" }, "↓"), alternatives),
-    el("div", { class: "col" },
-      el("dl", { class: "kv" },
-        el("dt", {}, "Advisor"), el("dd", {}, r.consulted_model ? badge(real ? "real" : "simulated", real ? `Real · Meta ${r.model}` : `Simulated · ${r.model}`) : "Not consulted"),
-        r.consulted_model ? [el("dt", {}, "Confidence"), el("dd", {}, el("span", { class: "meter", "aria-hidden": "true" }, levels.map((lvl, i) => el("i", { class: levels.indexOf(r.confidence) >= i ? "on" : "" }))), r.confidence || "none")] : null,
-        r.validation.length ? [el("dt", {}, "Checks"), el("dd", { class: passed === r.validation.length ? "ok-text" : "fail-text" }, `${passed}/${r.validation.length} deterministic checks passed`)] : null,
-        r.consulted_model && r.latency_ms !== null && r.latency_ms !== undefined ? [el("dt", {}, "Latency"), el("dd", {}, `${r.latency_ms} ms`)] : null,
-        !r.consulted_model && r.reason ? [el("dt", {}, "Reason"), el("dd", {}, r.reason)] : null),
-      el("div", { class: `info${r.consulted_model && real ? " real" : ""}` }, el("span", { class: "i", "aria-hidden": "true" }, "i"),
-        el("span", {}, !r.consulted_model ? "The AI was not consulted in this scenario."
-          : real ? "A real Meta Model API request, recorded in this evidence."
-            : "Simulated recovery by the offline mock. No Meta request was made."))),
-    auditLink);
+  const status = recovered ? ["ok", "Recovered"] : r.outcome === "skipped" ? ["muted", sc.healing ? "Not attempted" : "Self-healing off"]
+    : r.outcome === "error" ? ["fail", "Error"] : ["fail", `${r.outcome[0].toUpperCase()}${r.outcome.slice(1)} · stopped`];
+  // What this panel shows is the selected evidence, not the current backend settings in the header.
+  const details = el("button", { type: "button", class: "link-btn", "aria-label": "View the recovery details in the Developer view" }, "View details");
+  details.addEventListener("click", () => setView("developer"));
+  fill(box, head(...status),
+    facts(original,
+      recovered && r.proposed ? fact("Selected", el("strong", { class: "new" }, r.proposed.name || r.proposed.id))
+        : fact("Result", r.outcome === "skipped" ? "Not replaced · GhostFlow did not guess" : "Not applied · GhostFlow did not act"),
+      r.validation.length ? fact("Checks", el("span", { class: passed === r.validation.length ? "ok-text" : "fail-text", title: "GhostFlow's deterministic checks, run before acting" }, `${passed}/${r.validation.length} passed`)) : [],
+      source()),
+    el("div", { class: "heal-foot" }, el("span", {}, isLive() ? "Live recovery · this run" : "Recorded recovery · selected evidence"), details));
 }
 
 // Interpretation (GF-002) is optional context for self-healing (GF-003), never a requirement.
@@ -828,32 +816,190 @@ function independenceNote(b) {
   return healed ? el("p", { class: "provenance" }, "The recorded recovery (GF-003) is independent of the interpretation (GF-002): it ran on this same workflow without one, using the recorded step, the page's real candidates and GhostFlow's deterministic checks.") : null;
 }
 
-function renderUnderstand() {
-  const b = bundle();
+// -- AI provenance, stage by stage ------------------------------------------------------------
+// The interpretation (GF-002) and the recovery (GF-003) are separate model calls. Each stage is
+// labelled from its own record, never from a global "AI" setting, and request counts are shown
+// only when the evidence stores them. `chip` is the compact Demo label; `lines` are the details.
+
+const advisorName = (ai) => (ai.provider === "meta" ? `Meta Muse Spark · ${ai.model} (real requests)`
+  : ai.provider === "mock" ? "the offline mock (simulated) · 0 Meta requests" : "none configured");
+
+function interpretationStage(b) {
   const i = b.workflow.interpretation;
-  const ib = state.detail.interpretation_badge;
-  const box = $("understand");
-  const head = el("div", { class: "summary-head" }, el("h2", { id: "understand-title" }, "Understand · Meta Intelligence"), badge(ib.kind, ib.kind === "real" ? "Real" : ib.kind === "simulated" ? "Simulated" : "None"));
-  if (!i) {
-    box.className = "card understand compact";
-    return fill(box, el("div", { class: "u-head" }, head, el("p", { class: "note strong" }, "No AI interpretation stored for this workflow."),
-      el("p", { class: "note" }, `${b.workflow.source}. This panel only shows what a model actually returned.`), independenceNote(b)));
+  if (!i) return { kind: "none", tag: "None", chip: "Interpretation · None", title: "No interpretation stored", lines: [`${b.workflow.source}.`] };
+  const when = `generated ${utc(i.generated_at)} when the workflow was compiled (GF-002)`;
+  if (i.provider === "meta") {
+    return { kind: "recorded-real", tag: "Real · Meta", chip: "Interpretation · Meta recorded", title: `Meta Muse Spark · ${i.model}`,
+      lines: [`Real model call, recorded: ${when}.`, "Stored with the workflow: not a new request and not part of the run shown here."] };
   }
-  box.className = "card understand";
-  const byId = Object.fromEntries(b.workflow.steps.map((s) => [s.id, s]));
-  const critical = (i.steps || []).filter((s) => s.relevance === "critical");
-  const healed = b.scenarios.some((sc) => sc.steps.some((s) => s.recovery && s.recovery.consulted_model));
-  const fact = (k, ...v) => el("div", { class: "fact" }, el("div", { class: "k" }, k), ...v);
-  fill(box,
-    el("div", { class: "u-head" }, head, el("p", { class: "purpose" }, i.purpose)),
-    el("div", { class: "facts" },
-      fact("Expected outcome", i.expected_outcome || "—"),
-      fact("Critical steps", critical.length ? critical.map((s) => (byId[s.id] && byId[s.id].target ? elementName(byId[s.id].target) : s.id)).join(" · ") : "—"),
-      fact("Preconditions", `${(i.preconditions || []).length}`, (i.preconditions || [])[0] ? el("div", { class: "muted" }, i.preconditions[0]) : null),
-      fact("Review notes", `${(i.review_notes || []).length} for a human reviewer`)),
-    el("p", { class: "provenance" },
-      `Interpretation: ${i.provider} · ${i.model}, generated ${utc(i.generated_at)} when the workflow was compiled (GF-002).`,
-      healed ? " The recovery shown above is a separate execution with its own provenance." : ""));
+  return { kind: "simulated", tag: "Simulated", chip: `Interpretation · Simulated (${i.provider})`, title: `Simulated interpretation · ${i.provider} (${i.model})`, lines: [`Not generated by Meta: ${when}.`] };
+}
+
+function recoveryStage(b, sc) {
+  const mode = state.detail.presentation.mode;
+  const target = healingStep(sc);
+  const idx = target ? sc.steps.indexOf(target) : -1;
+  const r = target && target.recovery;
+  const none = (chip, ...lines) => ({ kind: "none", tag: "None", chip, source: "None", title: "No AI intervention", lines });
+  const advisor = b.ai.provider === "meta" ? "Meta" : b.ai.provider === "mock" ? "Mock" : "no advisor";
+  const advisorSource = b.ai.provider === "meta" ? `Meta Muse Spark · ${b.ai.model}` : b.ai.provider === "mock" ? "Mock · simulated" : "None";
+  if (!target) {
+    if (sc.state === "finished" && sc.status === "passed") return none("Recovery · Not needed", "Every recorded element was found; the model was not consulted.");
+    if (sc.state === "finished") return none("Recovery · None", "No step needed a recovery; the model was not consulted.");
+    return sc.healing
+      ? { kind: b.ai.provider === "mock" ? "simulated" : "none", tag: "Standing by", chip: `Recovery · ${advisor} · standing by`, source: advisorSource, title: "No intervention so far",
+        lines: [`Self-healing is on. Advisor if a recorded element goes missing: ${advisorName(b.ai)}.`] }
+      : none("Recovery · Off", `Self-healing is off in scenario ${sc.key}: no model is consulted.`);
+  }
+  if (!r) {
+    return { kind: b.ai.provider === "mock" ? "simulated" : "none", tag: "In progress", chip: `Recovery · ${advisor} · in progress`, source: advisorSource, title: "Recovery in progress",
+      lines: [`Advisor for this run: ${advisorName(b.ai)}.`] };
+  }
+  const real = r.provider === "meta";
+  const who = real ? `Meta Muse Spark · ${r.model}` : "the offline mock (simulated)";
+  if (r.consulted_model && !reachedStep(sc, idx)) {
+    return { kind: real ? "recorded-real" : "simulated", tag: "Playback", chip: `Recovery · ${real ? "Meta real" : "Mock"} · playback`,
+      source: real ? "Meta Muse Spark · recorded" : "Mock · simulated", title: `Recorded recovery by ${who}`, lines: [`The recorded result appears when the replay reaches ${target.id}.`] };
+  }
+  if (!r.consulted_model) return none(sc.healing ? "Recovery · Not attempted" : "Recovery · Off", `${r.reason || "Self-healing was not attempted"}. The model was not consulted.`);
+  const passed = r.validation.filter((c) => c.passed).length;
+  const outcome = `Outcome: ${r.outcome}${r.validation.length ? ` · ${passed}/${r.validation.length} deterministic checks passed` : ""}`
+    + `${r.outcome === "recovered" && r.proposed ? ` · chose "${r.proposed.name || r.proposed.id}" for ${elementName(target.target || target.label)}` : ""}.`;
+  if (real) {
+    const n = b.ai.provider === "meta" ? b.ai.requests_sent : 0;
+    // Real Meta in this live run, or a real call recorded earlier (never presented as a new one).
+    const when = mode === "live" ? "live" : "recorded";
+    return { kind: mode === "live" ? "real" : "recorded-real", tag: "Real · Meta", chip: `Recovery · Meta real · ${when}`,
+      source: `Meta Muse Spark · ${when}${n > 0 ? ` · ${plural(n, "request")}` : ""}`, title: `Meta Muse Spark · ${r.model}`, lines: [
+        mode === "live" ? "Real model call made during this live run."
+          : mode === "recorded" ? "Real model call, recorded evidence: shown from the file, not a new request."
+            : "Real model call made during this saved run; viewing it sends no new request.",
+        n > 0 ? `${plural(n, "real Meta request")} recorded in this evidence${b.ai.request_cap ? ` (cap ${b.ai.request_cap})` : ""}.` : "The number of requests is not recorded in this evidence.",
+        outcome] };
+  }
+  const mock = r.provider === "mock";
+  return { kind: "simulated", tag: "Simulated", chip: mock ? "Recovery · Mock" : `Recovery · Simulated (${r.provider})`,
+    source: mock ? `Mock · simulated${b.ai.provider === "meta" ? "" : " · 0 Meta requests"}` : `Simulated · ${r.provider}`,
+    title: mock ? "Offline mock · simulated recovery" : `Simulated recovery · ${r.provider}`, lines: [
+      `The advisor's answer was simulated by ${r.model}. ${b.ai.provider === "meta" ? "This step was not answered by Meta." : "0 Meta requests in this evidence."}`,
+      b.origin === "demo_runner" ? "The browser run itself is real: Playwright drove Chromium through the portal." : null,
+      outcome].filter(Boolean) };
+}
+
+function provenanceNote(b, sc) {
+  const i = b.workflow.interpretation;
+  const target = healingStep(sc);
+  const r = target && target.recovery;
+  const consulted = !!(r && r.consulted_model);
+  const ran = sc.started_at ? `on ${utc(sc.started_at)}` : "in this evidence";
+  if (i && consulted) {
+    // A mock answer is not a model call: name each stage by its own source.
+    const stored = `${i.provider === "meta" ? "the real Meta interpretation" : `the interpretation simulated by ${i.provider}`} was stored ${utc(i.generated_at)} when the workflow was compiled`;
+    if (r.provider !== "meta") {
+      return `Two independent AI stages, not one execution: ${stored}; the recovery ${ran} was simulated by the offline mock.`
+        + `${i.provider === "meta" ? " Neither stage sent a new Meta request." : " No Meta request was made."}`;
+    }
+    return `Two independent AI stages, not one execution: ${stored}; the recovery by Meta Muse Spark ran ${ran}.`;
+  }
+  if (i) return `The interpretation was stored ${utc(i.generated_at)} when the workflow was compiled; scenario ${sc.key} ran ${ran}, separately.`;
+  if (consulted) return "No interpretation is stored for this workflow: the recovery ran without one (GF-003 does not depend on GF-002).";
+  return "";
+}
+
+function stageBlock(n, label, s) {
+  return el("div", { class: `prov-stage ${s.kind}` },
+    el("div", { class: "ps-head" }, el("span", { class: "ps-n", "aria-hidden": "true" }, n), el("h3", {}, label), badge(s.kind, s.tag)),
+    el("p", { class: "ps-title" }, s.title),
+    el("ul", { class: "ps-lines" }, s.lines.map((t) => el("li", {}, t))));
+}
+
+const chipFor = (stage) => badge(stage.kind, stage.chip);
+
+// Demo view: one compact chip per AI stage, for the selected scenario. Details are in Developer.
+function renderProvRow() {
+  const b = bundle();
+  const sc = scenario();
+  fill($("prov-row"), sc ? [interpretationStage(b), recoveryStage(b, sc)].map((st) => el("li", {}, chipFor(st))) : []);
+}
+
+// Developer view (and the expanded dialog): every stage with its dates, model and requests.
+function renderProvenance() {
+  const b = bundle();
+  const sc = scenario();
+  if (!sc) { fill($("prov-stages")); fill($("xb-prov")); $("prov-note").textContent = ""; return; }
+  const blocks = () => [stageBlock("1", "Workflow interpretation", interpretationStage(b)), stageBlock("2", `Self-Healing recovery · scenario ${sc.key}`, recoveryStage(b, sc))];
+  fill($("prov-stages"), blocks());
+  fill($("xb-prov"), blocks());
+  $("prov-note").textContent = provenanceNote(b, sc);
+}
+
+// -- expanded browser ------------------------------------------------------------------------
+// The viewer's own nodes move into a modal dialog and back: live captures, replay, filmstrip and
+// labels stay in sync because nothing is copied or rendered twice. Images keep their own size.
+
+const moved = []; // [placeholder, node], restored in reverse order
+function moveInto(node, target) {
+  const mark = document.createComment(node.id);
+  node.before(mark);
+  moved.push([mark, node]);
+  target.append(node);
+}
+
+function openExpanded() {
+  if (state.expanded || !scenario()) return;
+  state.expanded = true;
+  moveInto($("stage-col"), $("xb-main"));
+  moveInto($("events"), $("xb-events"));
+  moveInto($("film"), $("xb-film")); // thumbnails beside the image leave it more height
+  $("stage-away").hidden = false;
+  document.documentElement.classList.add("xb-open");
+  const dialog = $("browser-dialog");
+  if (typeof dialog.showModal === "function") dialog.showModal(); else dialog.setAttribute("open", "");
+  render();
+  $("xb-close").focus();
+}
+
+function exitExpanded() {
+  const dialog = $("browser-dialog");
+  if (typeof dialog.close === "function" && dialog.open) dialog.close(); // fires "close"
+  else { dialog.removeAttribute("open"); restoreLayout(); }
+}
+
+// The dialog closed (button, Escape): the viewer goes back where it was and focus returns.
+function restoreLayout() {
+  if (!state.expanded) return;
+  state.expanded = false;
+  while (moved.length) { const [mark, node] = moved.pop(); mark.replaceWith(node); }
+  $("stage-away").hidden = true;
+  document.documentElement.classList.remove("xb-open");
+  render();
+  $("expand-browser").focus();
+}
+
+function renderExpanded() {
+  $("browser-dialog").classList.toggle("waiting", !state.detail);
+  if (!state.expanded) return;
+  const sc = state.detail && scenario();
+  if (!sc || !state.at) {
+    $("xb-title").textContent = "Expanded browser";
+    fill($("xb-progress"), "Loading the evidence…");
+    return;
+  }
+  const steps = visibleSteps(sc);
+  const idx = Math.min(state.at.idx, steps.length - 1);
+  const step = steps[idx];
+  $("xb-title").textContent = `Scenario ${sc.key} — ${shortTitle(sc)}`;
+  // The replay banner and the source badges stay behind the modal: repeat what kind of evidence this is.
+  const mode = state.detail.presentation;
+  fill($("xb-progress"),
+    replaying(sc) ? badge("stale", "Replay of saved evidence · playback pace") : badge(mode.mode, mode.text.split(" · ")[0], mode.mode === "live"),
+    " ", el("strong", {}, `Step ${idx + 1} of ${steps.length}`), ` · ${step.id} · ${STATE_TEXT[step.state]}`,
+    el("span", { class: "muted" }, ` · scenario: ${scenarioOutcome(sc).text}`));
+  fill($("xb-dots"), steps.map((s, i) => el("li", { class: `${s.state}${i === idx ? " on" : ""}` })));
+  $("xb-prev").setAttribute("aria-disabled", String(idx === 0));
+  $("xb-next").setAttribute("aria-disabled", String(idx >= steps.length - 1));
+  $("xb-agent").setAttribute("data-mood", $("mascot").getAttribute("data-mood"));
+  $("xb-agent-label").textContent = $("mascot-say").textContent;
 }
 
 // -- developer view ------------------------------------------------------------------------
@@ -1029,6 +1175,7 @@ function setView(view) {
 
 function renderViews() {
   const dev = state.view === "developer";
+  document.body.dataset.view = dev ? "developer" : "demo"; // the backend settings pills only show in Developer
   $("demo-view").hidden = dev;
   $("dev-view").hidden = !dev;
   for (const [id, on] of [["tab-demo", !dev], ["tab-dev", dev]]) {
@@ -1051,18 +1198,19 @@ function render() {
     $("empty").textContent = state.error || (state.sources.length
       ? "Choose an evidence source."
       : "No demo evidence yet. Run `make demo-rehearsal` (offline mock) or see docs/DEMO_RUNBOOK.md. Recorded evidence lives in docs/evidence.");
+    renderExpanded();
     return;
   }
   renderScenarios();
-  renderHero();
-  renderHow();
   renderStage();
+  renderHero();
+  renderProvenance();
   renderHealSummary();
-  renderUnderstand();
   renderTimeline();
   renderHealing();
   renderIntelligence();
   renderEvidence();
+  renderExpanded();
   const b = bundle();
   $("source-hint").textContent = `Source: ${b.workflow.source}. ${b.provenance || ""}`;
   if (focusKey) document.querySelector(`[data-focus-key="${CSS.escape(focusKey)}"]`)?.focus({ preventScroll: true });
@@ -1219,6 +1367,18 @@ document.addEventListener("DOMContentLoaded", () => {
   $("tab-dev").addEventListener("click", () => setView("developer"));
   $("show-capture").addEventListener("click", () => { state.stageView = "capture"; render(); });
   $("show-reconstructed").addEventListener("click", () => { state.stageView = "reconstructed"; render(); });
+  $("expand-browser").addEventListener("click", openExpanded);
+  $("xb-close").addEventListener("click", exitExpanded);
+  $("browser-dialog").addEventListener("close", restoreLayout); // Escape or the close button
+  for (const [id, delta] of [["xb-prev", -1], ["xb-next", 1]]) {
+    $(id).addEventListener("click", () => { if ($(id).getAttribute("aria-disabled") !== "true") stepBy(delta); });
+  }
+  $("browser-dialog").addEventListener("keydown", (e) => {
+    if (e.key === "Escape") { e.preventDefault(); exitExpanded(); return; }
+    if (e.altKey || e.ctrlKey || e.metaKey || !["ArrowLeft", "ArrowRight"].includes(e.key)) return;
+    e.preventDefault();
+    stepBy(e.key === "ArrowLeft" ? -1 : 1);
+  });
   arrowTabs(document.querySelector(".segmented"), (tab) => setView(tab.id === "tab-dev" ? "developer" : "demo"));
   arrowTabs($("scenarios"), (tab) => { chooseScenario(tab.getAttribute("data-key")); const again = $("scenarios").querySelector('[aria-selected="true"]'); if (again) again.focus(); });
   // The address names the evidence (#collection%2Fname): following a link or editing it switches source.

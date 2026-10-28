@@ -20,7 +20,7 @@ No hace falta Docker, PostgreSQL, Redis ni ningún servicio externo: la demo usa
 git clone https://github.com/BenjaminEscobar/ghostflow-ai.git
 cd ghostflow-ai
 make setup           # venv, dependencias, Chromium de Playwright
-make test            # 255 pruebas offline (sin navegador, sin red)
+make test            # 279 pruebas offline (sin navegador, sin red)
 make test-e2e        # 16 pruebas con Chromium real (extensión, replay, self-healing, consola)
 ```
 
@@ -50,11 +50,13 @@ El runner A/B/C necesita el **8080 libre**: detén `make portal` antes de ejecut
 
 | Comando | IA en el escenario C | Solicitudes a Meta | Etiqueta en la consola |
 |---|---|---|---|
-| `make demo-rehearsal` | Mock offline (determinista) | **0** | `Simulated AI · offline mock · no Meta request` (franja amarilla) |
-| `make demo-live` | **Meta Muse Spark real** | **Máx. 1** (sin reintentos, tope duro 1). Pide escribir `meta` para confirmar | `Real Meta Model API · muse-spark-1.3 · 1 request` (azul) |
+| `make demo-rehearsal` | Mock offline (determinista) | **0** | `Recovery · Simulated AI · offline mock · 0 Meta requests` (franja amarilla) |
+| `make demo-live` | **Meta Muse Spark real** | **Máx. 1** (sin reintentos, tope duro 1). Pide escribir `meta` para confirmar | `Recovery · Real Meta Model API · muse-spark-1.3 · 1 request` (azul) |
 | `make demo-healing` / `make demo-healing-meta` | Igual que los anteriores, sin modo visual (GF-003) | 0 / máx. 1 | Igual |
 | `make console` | Ninguna: solo lee | 0 | — |
-| Compilar una grabación con `GHOSTFLOW_AI_PROVIDER=meta` | Interpretación GF-002 | 1 por compilación | Panel *Meta Intelligence* → `Real` |
+| Compilar una grabación con `GHOSTFLOW_AI_PROVIDER=meta` | Interpretación GF-002 | 1 por compilación | `Interpretation · Meta Muse Spark · muse-spark-1.3 · recorded` y panel *Meta Intelligence* → `Real` |
+
+Cada etapa de IA lleva **su propia** etiqueta, derivada de su propio registro: la interpretación (guardada en el workflow al compilarlo) y la recuperación (guardada en el paso). No hay una etiqueta global de IA: un ensayo con mock sobre el workflow interpretado por Meta muestra *Interpretation · Meta Muse Spark · recorded* y *Recovery · Simulated AI* a la vez, y ambas son correctas.
 
 Los escenarios A y B nunca consultan a Meta. La consola **nunca** presenta una evidencia guardada como ejecución en vivo: `Live` solo aparece mientras el runner está actualizando el archivo. La evidencia versionada se muestra como `Recorded evidence · replay of a saved run, not live`, y el botón *Replay* añade una franja `REPLAY of saved evidence · not a live execution`.
 
@@ -129,8 +131,8 @@ Por API (solo lectura): `GET /api/demo/sources`, `GET /api/demo/sources/{recorde
 La revisión independiente y sus resultados finales están en [GF006_INDEPENDENT_REVIEW.md](GF006_INDEPENDENT_REVIEW.md). Las cifras iniciales de GF-006 que siguen son la baseline previa a esa revisión.
 
 ```bash
-make test        # 255 offline: incluye 33 de la consola y 24 de capturas GF-006 (privacidad, límites, endpoint, estados de la mascota, cambio de evidencia, ensayo integrado)
-make test-e2e    # 19 con Chromium: incluye 6 de la consola y 3 de capturas reales GF-006 (pasos, paso sensible, Recorded capture vs Reconstructed view, ensayo integrado A/B/C)
+make test        # 279 offline (273 de la baseline ae4d519 + 6 del pulido final: insignias y chips por etapa, procedencia, diálogo ampliado, jerarquía de la vista Demo y paleta sobria con contraste AA)
+make test-e2e    # 36 con Chromium (27 de la baseline + 9 del pulido final: visor ampliado a 1440/1024/820, GF-003 reconstruida, procedencia Demo/Developer, ensayo A/B/C con el visor ampliado y composición "navegador primero" medida a 1440/1024/820)
 git diff --check
 ```
 
@@ -140,20 +142,20 @@ Las pruebas ignoran `backend/.env` y bloquean toda red externa. Solo se permiten
 
 1. `make console` y abre `http://127.0.0.1:8010/console/#recorded%2Fgf003-meta-recovery` en Chrome.
 2. **Vista Demo** (por defecto), de arriba abajo:
-   - **Barra superior:** marca GhostFlow AI, selector *Demo / Developer* y *Current backend settings* (*Online · Default AI · Self-healing*): la configuración actual del backend. Los resultados históricos llevan su propia etiqueta, por ejemplo *Recorded recovery · selected evidence* en el panel Self-Healing, de modo que *Self-healing off* arriba y una recuperación grabada abajo pueden ser correctos a la vez.
-   - **Barra lateral:** fuente de evidencia, con las insignias *Recorded / Saved / Live* y *Real / Simulated*, y los escenarios A/B/C. A 1024 y 820 px se convierte en una franja sobre el contenido.
-   - **Portada:** *Automation that adapts*, las tarjetas **Learns / Understands / Recovers** con datos de la evidencia, la mascota grande y la tarjeta *How it works* con **Replay evidence**.
-   - **Páginas del flujo:** *Home → Dashboard → New request → Confirmation*, derivadas de los pasos `navigate`/`wait_for_url`.
-   - **Tarjeta del escenario:** resultado, tiempo total (solo si la evidencia lo guarda), asesor de IA y DSL. A la izquierda, los pasos agrupados por página. A la derecha, el navegador **reconstruido** (dice *not a screenshot*) con los elementos que GhostFlow usó y los eventos (*Recorded element not found* → *… proposed an alternative*).
-   - **Panel Self-Healing with AI:** elemento original → alternativas (c1/c2/c3, *Selected*), asesor, confianza, *10/10 deterministic checks passed* y latencia.
-   - **Understand · Meta Intelligence:** a lo ancho, con la procedencia de la interpretación separada de la de la recuperación. Si el workflow no tiene interpretación, la insignia queda en *None* y una nota explica que la recuperación grabada (GF-003) es independiente de la interpretación (GF-002).
+   - **Barra superior:** marca GhostFlow AI, selector *Demo / Developer* y el estado *Online*. La configuración actual del backend (*Current backend settings · Default AI · Self-healing*) solo se muestra en Developer, para que no se confunda con la evidencia elegida.
+   - **Barra lateral:** fuente de evidencia, con dos líneas discretas (*Recorded / Saved / Live* y *Real / Simulated*), y los escenarios con títulos breves: *A — Original / Completed*, *B — Changed UI / Stopped safely*, *C — Changed UI / Recovered*. A 1024 y 820 px se convierte en una franja sobre el contenido.
+   - **Franja superior compacta (~130 px):** la mascota (88 px, con su estado), *Learned workflow · nombre · N steps*, *Automation that adapts* con una sola frase, la **fila de procedencia** (*Interpretation · …* y *Recovery · …*, para el escenario elegido) y **Replay evidence**.
+   - **Una línea de escenario** (*Scenario C — Changed UI · self-healing on*, resultado, tiempo total si la evidencia lo guarda y estado del DSL) y las **páginas del flujo** (*Home → Dashboard → New request → Confirmation*), en una barra baja.
+   - **Navegador** (~75 % del ancho, empieza hacia los 300 px a 1440×900): en su barra, la etiqueta *Live / Recorded capture / Reconstructed view*, la dirección, el conmutador *Real capture / Reconstructed* y **Expand browser**. Debajo, el paso en foco, el pie de la captura y las miniaturas.
+   - **Columna derecha (~25 %), alineada con el borde superior del navegador:** el estado de GhostFlow, el panel **Recovery** (*Recovered / Stopped safely / Not needed*, elemento original tachado, elemento elegido, *10/10 passed*, fuente *Meta / Mock / None* y *View details*), **Verification** (*2/2 passed* y cada comprobación) y, debajo, los pasos agrupados por página.
+   - Candidatos, latencia, tokens, confianza, hashes y validaciones detalladas siguen en **Developer** (*Meta Intelligence*, *AI provenance by stage*, *Self-Healing audit* y *Verifiable evidence*), igual que la lista de eventos, que también aparece en el visor ampliado.
 3. Recorre los escenarios con el teclado: `Tab` hasta un escenario y luego las flechas, `Inicio` y `Fin`. La mascota cambia: orgullosa en C (recuperado), alerta en B (detenido de forma segura), feliz en A.
 4. Haz clic en una página del flujo o en un paso de la lista para inspeccionarlo. Vuelve a hacer clic para volver al paso clave.
-5. Pulsa **Replay evidence**: aparece la franja violeta *REPLAY of saved evidence · not a live execution*.
+5. Pulsa **Replay evidence**: aparece la franja azul clara *REPLAY of saved evidence · not a live execution*.
 6. Cambia a **Developer** (o abre `…/console/?view=developer#recorded%2Fgf003-meta-recovery`). Están las auditorías completas: localizadores agotados, candidatos, las 10 validaciones, tokens, latencia, proveedor y modelo, SHA-256 completo y procedencia. **Raw JSON** abre la evidencia tal como la sirve el backend.
 7. Ancho adaptable: con las DevTools (`⌥⌘I` → *Toggle device toolbar*) prueba 1440, 1024 y 820 px. No debe aparecer scroll horizontal ni texto comprimido en columnas estrechas (la E2E `test_demo_and_developer_views_are_usable_on_desktop_and_tablet` lo comprueba en esos tres anchos).
 8. Accesibilidad: en *Configuración del Sistema → Accesibilidad → Pantalla → Reducir movimiento* las animaciones se detienen. Con VoiceOver (`⌘F5`), la mascota se anuncia con su estado (p. ej. *GhostFlow mascot: recovered safely*) y cada cambio de estado se anuncia una sola vez (*GhostFlow: Investigating… recovery in progress*).
-9. Con una ejecución nueva (`make demo-rehearsal`), la consola cambia sola a *Live* y muestra las capturas reales (*Live capture*); la insignia amarilla *Simulated AI* sigue visible. Ver la sección 10.1.
+9. Con una ejecución nueva (`make demo-rehearsal`), la consola cambia sola a *Live* y muestra las capturas reales (*Live capture*); la línea *Recovery · Simulated AI* de la barra lateral y el chip *Recovery · Mock* siguen visibles. Ver las secciones 10.1, 10.2 y 10.3.
 
 ### 10.1 Navegador integrado con capturas reales (GF-006)
 
@@ -173,7 +175,44 @@ Las pruebas ignoran `backend/.env` y bloquean toda red externa. Solo se permiten
 8. Pruebas en tu Mac:
    ```bash
    cd backend && .venv/bin/pytest -m e2e tests/test_e2e_captures.py -v
-   make test-all   # 255 offline + 19 E2E
+   make test-all   # 279 offline + 36 E2E
+   ```
+
+### 10.2 Visor ampliado y procedencia de la IA por etapa (pulido final)
+
+Sin llamadas a Meta. Usa `make console` en una terminal.
+
+1. **Procedencia por etapa.** Abre `http://127.0.0.1:8010/console/#recorded%2Fgf003-meta-recovery`. En la franja superior, la fila de procedencia del escenario C dice *Interpretation · None* y *Recovery · Meta real · recorded* (azul claro: Meta real, grabado); el panel Recovery indica la fuente *Meta Muse Spark · recorded · 1 request*. En B, *Recovery · Off* y el panel dice *Self-healing off*. Los estados posibles son *Recovery · Meta real · live* (azul sólido, solo durante una ejecución real en curso), *Meta real · recorded* (azul claro), *Mock* (neutro discontinuo; el panel dice *Mock · simulated · 0 Meta requests*), *… · in progress*, *… · playback*, *Not needed*, *Not attempted* y *Off*.
+   - **Developer → Meta Intelligence → AI provenance by stage** conserva el detalle: *1 · Workflow interpretation* (*No interpretation stored*) y *2 · Self-Healing recovery · scenario C* (*Meta Muse Spark · muse-spark-1.3*, *Real model call, recorded evidence: shown from the file, not a new request*, *1 real Meta request recorded in this evidence (cap 1)* y el resultado).
+2. **Ensayo con mock.** Terminal 2: `make demo-rehearsal` (0 solicitudes). En la vista Demo, para C: *Interpretation · Meta recorded* y *Recovery · Mock*; mientras se recupera, *Recovery · Mock · in progress*. En Developer, *AI provenance by stage* muestra la fecha de compilación de la interpretación, *The browser run itself is real: Playwright drove Chromium through the portal* y la nota *Two independent AI stages, not one execution*, que dice que ninguna etapa hizo una solicitud nueva a Meta.
+3. **Visor ampliado.** Pulsa **⤢ Expand browser** (sobre el navegador). El mismo visor pasa a un diálogo que ocupa casi toda la pantalla:
+   - la imagen se muestra a su tamaño real como máximo (nunca ampliada por encima de sus píxeles) y cabe entera en pantalla;
+   - se mantienen la etiqueta *Live capture / Recorded capture / Reconstructed view*, el pie de la captura, la nota de los pasos sensibles y la tira de miniaturas (a la derecha);
+   - la cabecera muestra el tipo de evidencia (*Live*, *Saved run*, *Recorded evidence* o *Replay of saved evidence · playback pace*), *Step N of M*, el estado del paso y una barra de progreso por paso;
+   - la columna derecha muestra el estado de GhostFlow, las dos etapas de procedencia y los eventos.
+   Con el foco en el diálogo, **←/→** recorren los pasos, **Esc** o *Exit expanded view* vuelven a la distribución normal y el foco regresa al botón *Expand browser*. Mientras está abierto, el resto de la página queda inerte.
+4. **En vivo.** Abre el visor ampliado **antes** de lanzar `make demo-rehearsal`: la consola cambia sola a la ejecución nueva y el diálogo sigue A, B y C con *Live capture*, sin cerrarse.
+5. **Sin capturas.** En *Recorded evidence → GF-003*, el visor ampliado muestra la reconstrucción más grande, con la etiqueta *Reconstructed view* y *not a screenshot*.
+6. **Anchos.** Con las DevTools prueba 1440×900, 1024×1366 y 820×1180: sin scroll horizontal; dentro del diálogo, a 1024 y 820 la columna derecha pasa debajo de la imagen, y a 820 el diálogo ocupa toda la pantalla.
+7. **Replay.** Pulsa *Replay evidence* y luego *Expand browser*: la reproducción continúa dentro del diálogo, rotulada como *Replay of saved evidence · playback pace*, y la recuperación figura como *playback* hasta llegar a `s6`.
+8. Pruebas en tu Mac:
+   ```bash
+   cd backend && .venv/bin/pytest -m e2e tests/test_e2e_presentation.py -v
+   ```
+
+### 10.3 Composición final de la vista Demo (navegador primero)
+
+Sin llamadas a Meta. Con `make console`, abre una evidencia con capturas (por ejemplo, la última de `make demo-rehearsal`) y la grabada GF-003.
+
+1. **1440×900** (ventana de Chrome a ese tamaño o DevTools): el borde superior del navegador queda hacia los 300 px (la E2E exige ≤ 350) y la captura se ve sin desplazarse. El panel derecho (estado de GhostFlow → Recovery → Verification) empieza a la misma altura que el navegador.
+2. **1024** (1024×768 o 1024×1366): la barra lateral pasa a una franja; navegador y panel siguen lado a lado y alineados arriba. El botón *Expand browser* queda como icono ⤢ (mismo nombre accesible).
+3. **820×1180:** el panel y la lista de pasos pasan debajo del navegador, en dos columnas. Sin scroll horizontal ni texto en columnas estrechas.
+4. **Paleta:** neutros (#F5F7FA, blanco, bordes #E2E8F0), azul #1877F2 en botones, navegación, selección y progreso; el violeta solo en el marcador de recuperación (punto de C, nodo del paso recuperado) y en la mascota. La E2E mide en la captura de pantalla que el violeta ocupa ≤ 5 % (≈ 0,1–0,3 % medido).
+5. **Escenarios:** *Original / Completed*, *Changed UI / Stopped safely*, *Changed UI / Recovered*. Con VoiceOver se anuncian como *Scenario C · Changed UI · Recovered (Recovered s6 · completed)*.
+6. **Recovery → View details** abre Developer en la auditoría (*Deterministic validation by GhostFlow*).
+7. Pruebas en tu Mac:
+   ```bash
+   cd backend && .venv/bin/pytest -m e2e tests/test_e2e_presentation.py tests/test_e2e_console.py -v
    ```
 
 ## 11. Procedimiento para grabar el video final
@@ -183,9 +222,9 @@ Las pruebas ignoran `backend/.env` y bloquean toda red externa. Solo se permiten
 3. Decide si el escenario C del video usa:
    - **la ejecución real ya guardada** (*Recorded evidence*, 0 solicitudes nuevas), presentándola como evidencia grabada, o
    - **una ejecución real nueva**: `make demo-live`, 1 solicitud. Requiere tu autorización explícita y la clave en `backend/.env`.
-4. Graba solo la consola: `make demo-rehearsal` (o `demo-live`) ejecuta Chromium sin ventana y la consola muestra sus capturas reales. Si además quieres tomas de la ventana de Chromium, usa `DEMO_HEADED=1`. En macOS cada escenario abre una ventana nueva en primer plano, así que tendrás que alternar entre ellas.
+4. Graba solo la consola: `make demo-rehearsal` (o `demo-live`) ejecuta Chromium sin ventana y la consola muestra sus capturas reales. Para que el navegador se lea en el video, pulsa **Expand browser** antes de lanzar el runner (sección 10.2). Antes de las tomas de C, señala la fila de procedencia de la franja superior: interpretación de Meta grabada y recuperación simulada (ensayo) o real (evidencia grabada o `demo-live`). Si además quieres tomas de la ventana de Chromium, usa `DEMO_HEADED=1`. En macOS cada escenario abre una ventana nueva en primer plano, así que tendrás que alternar entre ellas.
 5. No muestres terminales con variables de entorno ni el contenido de `backend/.env`.
-6. Revisa el video: la etiqueta *Simulated* no debe aparecer en una toma narrada como Meta real, y viceversa.
+6. Revisa el video: la etiqueta *Simulated* no debe aparecer en una toma narrada como Meta real, y viceversa. Narra cada etapa con su propia etiqueta: *Interpretation* y *Recovery* pueden tener fuentes distintas.
 
 ## 12. Limitaciones conocidas
 
