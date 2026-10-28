@@ -273,7 +273,7 @@ def make_client(tmp_path, **settings) -> TestClient:
         database_url=f"sqlite:///{tmp_path / 'c.db'}", demo_recorded_dir=str(RECORDED_DIR),
         demo_evidence_dir=str(tmp_path / "runs"), **settings,
     )  # fmt: skip
-    return TestClient(create_app(s, provider=MockModelProvider()))
+    return TestClient(create_app(s, provider=MockModelProvider()), base_url="http://127.0.0.1:8010")
 
 
 def test_sources_list_recorded_runs_and_workflows(tmp_path, workflow):
@@ -347,7 +347,7 @@ def test_console_frontend_cannot_turn_evidence_into_markup_or_reach_out():
     for banned in ["innerHTML", "outerHTML", "insertAdjacentHTML", "document.write", "eval(", "new Function", "localStorage"]:
         assert banned not in js, banned
     assert re.findall(r"fetch\(([^,)]+)", js) == ["path"]
-    calls = re.findall(r"getJSON\(`([^`]*)`\)", js)
+    calls = re.findall(r"getJSON\(`([^`]*)`[,)]", js)
     assert len(calls) == 2 and all(c.startswith("${API}/") for c in calls) and 'const API = "/api/demo";' in js
     for text in (js, html, css):
         assert not re.search(r"https?://(?!www\.w3\.org/2000/svg)", text)  # no external resources
@@ -515,7 +515,7 @@ def test_mascot_is_an_original_inline_svg_with_an_accessible_name():
 def test_demo_view_never_presents_reconstruction_as_live_or_as_a_screenshot():
     js = (STATIC_DIR / "console.js").read_text(encoding="utf-8")
     assert "Reconstructed from saved evidence · not a screenshot" in js
-    assert "Live from the demo runner · the real browser is the Chromium window" in js
+    assert "Live from the demo runner · Chromium runs headless by default" in js
     assert "REPLAY of saved evidence · not a live execution" in js
     assert "when the workflow was compiled (GF-002)" in js and "separate execution with its own provenance" in js
     assert re.search(r"Math\.random|Date\.now\(\)", js) is None  # no invented timings or values

@@ -48,6 +48,10 @@ def offline_only(monkeypatch) -> LocalHttpAllowlist:
     monkeypatch.setitem(Settings.model_config, "env_file", None)
     for name in [n for n in os.environ if n.startswith("GHOSTFLOW_")]:
         monkeypatch.delenv(name)
+    # The suite controls its network transports; inherited proxies must not bypass that guard
+    # or require optional SOCKS packages before the guard can even run.
+    for name in ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy"):
+        monkeypatch.delenv(name, raising=False)
 
     allowlist = LocalHttpAllowlist()
     real_sync = httpx.HTTPTransport.handle_request
