@@ -12,7 +12,9 @@ Where bundles come from, and how the console must present them:
 - stored runs of a backend workflow are turned into a bundle on request (read-only).
 
 Nothing here executes anything. Bundles never hold sensitive input values, secrets or full
-page content; every string is re-checked when a bundle is read.
+page content; every string is re-checked when a bundle is read. Browser captures (GF-006) are
+JPEG files next to the runs bundles (`<runs dir>/captures/<bundle name>/<capture id>.jpg`); a
+bundle only lists their metadata, and only listed, non-skipped captures are ever served.
 """
 
 import argparse
@@ -34,6 +36,7 @@ from ghostflow.dsl.models import NavigateStep, Workflow, WaitForUrlStep
 from ghostflow.execution.base import RunResult, StepResult, VerificationResult, redact_inputs
 from ghostflow.execution.recovery import RecoveryAttempt
 from ghostflow.security.redaction import looks_like_secret
+from ghostflow.security.files import jpeg_dimensions, read_artifact
 
 FORMAT = "ghostflow.demo-evidence/1"
 LIVE_WINDOW = timedelta(seconds=20)  # a running bundle not updated for this long is "stale"
@@ -115,6 +118,37 @@ class StepView(_Model):
     recovery: RecoveryAttempt | None = None
 
 
+class CaptureBox(_Model):
+    """Where the element being used was, as fractions of the captured viewport."""
+
+    x: float = Field(ge=0, le=1)
+    y: float = Field(ge=0, le=1)
+    w: float = Field(ge=0, le=1)
+    h: float = Field(ge=0, le=1)
+
+
+CaptureSkip = Literal["sensitive_step", "sensitive_page", "off_origin", "limit", "rate", "too_large", "error"]
+
+
+class CaptureRef(_Model):
+    """A real screenshot of the Chromium page GhostFlow controlled (or why none was taken)."""
+
+    id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$")
+    step_id: str | None = None  # None: the final page, after the verifications
+    phase: Literal["before", "after", "not_found", "final"]
+    taken_at: datetime
+    page: str | None = None  # origin + path, no query
+    width: int | None = Field(default=None, ge=1, le=4000)
+    height: int | None = Field(default=None, ge=1, le=4000)
+    bytes: int | None = Field(default=None, ge=0)
+    box: CaptureBox | None = None
+    masked: int = 0  # fields Playwright masked while taking it
+    skipped: CaptureSkip | None = None
+
+
+MAX_CAPTURES = 80  # per scenario, in the bundle
+
+
 class ScenarioView(_Model):
     key: str
     title: str
@@ -131,6 +165,7 @@ class ScenarioView(_Model):
     finished_at: datetime | None = None
     # True when step states were reconstructed from a summary (imported evidence), not observed.
     derived_steps: bool = False
+    captures: list[CaptureRef] = Field(default_factory=list, max_length=MAX_CAPTURES)
 
 
 class AiUsage(_Model):
@@ -260,6 +295,8 @@ def apply_event(scenario: ScenarioView, event: str, payload: dict) -> None:
             _apply_result(by_id[result.step_id], result)
     elif event == "verification_finished":
         scenario.verifications.append(VerificationResult.model_validate(payload))
+    elif event == "capture" and len(scenario.captures) < MAX_CAPTURES:
+        scenario.captures.append(CaptureRef.model_validate(payload))
 
 
 def finish_scenario(scenario: ScenarioView, result: RunResult) -> None:
@@ -300,6 +337,8 @@ def sanitize_bundle(bundle: EvidenceBundle) -> EvidenceBundle:
                     check.detail = mask_secrets(check.detail)
         for v in scenario.verifications:
             v.detail = mask_secrets(v.detail)
+        for c in scenario.captures:
+            c.page = mask_secrets(c.page, 300)
     bundle.provenance = mask_secrets(bundle.provenance)
     return bundle
 
@@ -498,24 +537,36 @@ class EvidenceStore:
     """Read-only access to bundles in two directories: recorded (versioned) and runs (local)."""
 
     MAX_BYTES = 2_000_000
+    MAX_CAPTURE_BYTES = 1_000_000
 
     def __init__(self, recorded_dir: Path, runs_dir: Path):
         self.dirs: dict[str, Path] = {"recorded": Path(recorded_dir), "runs": Path(runs_dir)}
 
-    def _path(self, collection: str, name: str) -> Path:
-        base = self.dirs.get(collection)
-        if base is None or not _NAME.match(name):
-            raise EvidenceNotFound(name)
-        path = (base / f"{name}.json").resolve()
-        if path.parent != base.resolve() or not path.is_file():
-            raise EvidenceNotFound(name)
-        return path
+    def capture_file(self, name: str, capture_id: str) -> bytes:
+        """The image of a capture listed (and not skipped) in the runs bundle `name`. Recorded
+        evidence never has captures: the GF-003 run stored none, and none are made up for it."""
+        bundle = self.load("runs", name)
+        listed = {c.id for sc in bundle.scenarios for c in sc.captures if c.skipped is None}
+        if capture_id not in listed:
+            raise EvidenceNotFound(capture_id)
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,79}", capture_id):
+            raise EvidenceNotFound(capture_id)
+        # Read from the checked descriptor now, never re-open a checked path in FileResponse.
+        data = read_artifact(self.dirs["runs"], ("captures", name, f"{capture_id}.jpg"), self.MAX_CAPTURE_BYTES)
+        width, height = jpeg_dimensions(data)
+        if width > 1440 or height > 900:
+            raise EvidenceNotFound(capture_id)
+        return data
 
     def load(self, collection: str, name: str) -> EvidenceBundle:
-        path = self._path(collection, name)
-        if path.stat().st_size > self.MAX_BYTES:
-            raise ValueError("Evidence file too large")
-        return sanitize_bundle(EvidenceBundle.model_validate_json(path.read_text(encoding="utf-8")))
+        base = self.dirs.get(collection)
+        if base is None or not _NAME.fullmatch(name):
+            raise EvidenceNotFound(name)
+        try:
+            data = read_artifact(base, (f"{name}.json",), self.MAX_BYTES)
+        except OSError:
+            raise EvidenceNotFound(name) from None
+        return sanitize_bundle(EvidenceBundle.model_validate_json(data))
 
     def entries(self, now: datetime | None = None) -> list[dict]:
         out = []
@@ -529,9 +580,12 @@ class EvidenceStore:
                 entry: dict[str, Any] = {"collection": collection, "name": name, "valid": True}
                 try:
                     bundle = self.load(collection, name)
-                except (ValidationError, ValueError, OSError):
+                except (EvidenceNotFound, ValidationError, ValueError, OSError):
                     entry.update(valid=False, title=name, error="Not a GhostFlow demo evidence bundle")
-                    entry["updated_at"] = datetime.fromtimestamp(path.stat().st_mtime, UTC).isoformat()
+                    try:
+                        entry["updated_at"] = datetime.fromtimestamp(path.lstat().st_mtime, UTC).isoformat()
+                    except FileNotFoundError:
+                        continue  # retention may remove an entry between listing and reading
                 else:
                     entry.update(title=bundle.title, updated_at=bundle.updated_at.isoformat(), **present(bundle, collection, now))
                 out.append(entry)

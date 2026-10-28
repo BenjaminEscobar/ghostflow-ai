@@ -7,16 +7,20 @@ Safety properties:
 - Sensitive input values are scrubbed from error messages before they are returned.
 - Self-healing (execution/recovery.py) only runs when every recorded locator found nothing,
   before the step acted, and can only act on a candidate GhostFlow extracted and validated.
+- Browser captures (execution/capture.py) are optional and passive: they never act on the
+  page, and a failing capture is ignored like a failing observer.
 """
 
 import logging
 import time
 from collections.abc import Callable, Mapping
 from datetime import UTC, datetime
-from urllib.parse import urlsplit
+from typing import Protocol
+from urllib.parse import urlsplit, urlunsplit
 
 from playwright.sync_api import Error as PlaywrightError
-from playwright.sync_api import Locator, Page, Route, sync_playwright
+from playwright.sync_api import Locator, Page, Route, WebSocketRoute, sync_playwright
+from playwright.async_api import WebSocketRoute as AsyncWebSocketRoute
 
 from ghostflow.dsl.models import (
     CheckStep,
@@ -55,6 +59,13 @@ log = logging.getLogger("ghostflow.execution")
 RunObserver = Callable[[str, dict], None]
 
 
+class StepCapture(Protocol):
+    """Optional browser captures (execution/capture.py). Passive: it may read the page and take a
+    screenshot, never act on it; it returns the capture's metadata and its errors are ignored."""
+
+    def take(self, page: Page, *, step_id: str | None, phase: str, target: Locator | None = None) -> dict: ...
+
+
 class StepFailure(Exception):
     pass
 
@@ -85,7 +96,10 @@ class PlaywrightWebAdapter:
 
     # -- public -------------------------------------------------------------------------
 
-    def execute(self, workflow: Workflow, inputs: Mapping[str, str], *, observer: RunObserver | None = None) -> RunResult:
+    def execute(
+        self, workflow: Workflow, inputs: Mapping[str, str], *, observer: RunObserver | None = None,
+        capture: StepCapture | None = None,
+    ) -> RunResult:  # fmt: skip
         started = _now()
         values = resolve_inputs(workflow, inputs)
         secrets = [values[i.name] for i in workflow.inputs if i.sensitive and values.get(i.name)]
@@ -103,16 +117,48 @@ class PlaywrightWebAdapter:
             try:
                 observer(event, payload)
             except Exception:  # an observer never changes the run
-                log.warning("run observer failed on %s", event, exc_info=True)
+                log.warning("run observer failed on %s", event)
+
+        def snap(page: Page, step_id: str | None, phase: str, target: Locator | None = None) -> None:
+            if capture is None:
+                return
+            try:
+                meta = capture.take(page, step_id=step_id, phase=phase, target=target)
+            except Exception:  # a capture never changes the run
+                log.warning("capture failed on %s/%s", step_id, phase)
+                return
+            if meta:
+                notify("capture", meta)
 
         def guard(route: Route) -> None:
             url = route.request.url
             if policy.is_allowed(url):
                 route.continue_()
             else:
-                parts = urlsplit(url)
-                blocked.append(f"{parts.scheme}://{parts.netloc}{parts.path}"[:300])
+                note_blocked(url)
                 route.abort("blockedbyclient")
+
+        def note_blocked(url: str) -> None:
+            parts = urlsplit(url)
+            if len(blocked) < 50:
+                blocked.append(_scrub(f"{parts.scheme}://{parts.hostname or ''}"
+                                      f"{':' + str(parts.port) if parts.port else ''}{parts.path}", secrets)[:300])
+
+        def guard_socket(route: WebSocketRoute):
+            # HTTP routing does not intercept WebSocket handshakes. Apply the same exact-origin
+            # policy to their HTTP(S) counterpart before any upstream connection is made.
+            parts = urlsplit(route.url)
+            scheme = {"ws": "http", "wss": "https"}.get(parts.scheme, parts.scheme)
+            if policy.is_allowed(urlunsplit(parts._replace(scheme=scheme))):
+                route.connect_to_server()
+            else:
+                note_blocked(route.url)
+                # In pinned Playwright 1.63 the socket callback runs on the dispatcher greenlet:
+                # Sync close() spins there. The handler supports an awaitable, so bridge the
+                # same route to its async API (no second thread, browser or upstream socket).
+                return AsyncWebSocketRoute(route._impl_obj).close(  # pinned API bridge
+                    code=1008, reason="Origin outside workflow allowlist",
+                )
 
         try:
             with sync_playwright() as pw:
@@ -120,6 +166,7 @@ class PlaywrightWebAdapter:
                 try:
                     context = browser.new_context(service_workers="block", accept_downloads=False)
                     context.route("**/*", guard)
+                    context.route_web_socket("**/*", guard_socket)
                     page = context.new_page()
                     page.set_default_timeout(self._timeout)
                     state = RunState()
@@ -128,7 +175,7 @@ class PlaywrightWebAdapter:
                         if i and self._delay:
                             page.wait_for_timeout(self._delay)
                         notify("step_started", {"step_id": step.id, "index": i})
-                        result = self._run_step(page, workflow, step, values, policy, secrets, state, notify)
+                        result = self._run_step(page, workflow, step, values, policy, secrets, state, notify, snap)
                         steps.append(result)
                         notify("step_finished", result.model_dump(mode="json"))
                         if result.status == "failed":
@@ -149,6 +196,7 @@ class PlaywrightWebAdapter:
                         verifications.append(self._verify(page, idx, check, secrets))
                     for v in verifications:
                         notify("verification_finished", v.model_dump(mode="json"))
+                    snap(page, None, "final")
                     if any(v.status == "failed" for v in verifications):
                         status = "failed"
                     if self._final_hold:
@@ -174,8 +222,9 @@ class PlaywrightWebAdapter:
 
     def _run_step(
         self, page: Page, workflow: Workflow, step, values: dict[str, str], policy: UrlPolicy, secrets: list[str],
-        state: RunState, notify: Callable[[str, dict], None] | None = None,
+        state: RunState, notify: Callable[[str, dict], None] | None = None, snap: Callable[..., None] | None = None,
     ) -> StepResult:  # fmt: skip
+        snap = snap or (lambda *args, **kwargs: None)
         t0 = time.monotonic()
         result = StepResult(step_id=step.id, action=step.action, status="passed")
         try:
@@ -183,13 +232,16 @@ class PlaywrightWebAdapter:
                 policy.check(step.url)
                 page.goto(step.url, wait_until="domcontentloaded")
                 state.unconfirmed_side_effect = False
+                snap(page, step.id, "after")
             elif isinstance(step, WaitForUrlStep):
                 page.wait_for_url(lambda url: urlsplit(url).path == step.path, wait_until="domcontentloaded")
                 state.unconfirmed_side_effect = False  # the previous action's outcome is now known
+                snap(page, step.id, "after")
             else:
                 try:
                     locator, index = self._resolve(page, step.target)
                 except ElementNotFound as failure:
+                    snap(page, step.id, "not_found")
                     if notify is not None and self._healer.policy.enabled:
                         notify("recovery_started", {"step_id": step.id, "exhausted_strategies": failure.tried})
                     self._recover(page, workflow, step, values, secrets, failure, state, result)
@@ -200,6 +252,7 @@ class PlaywrightWebAdapter:
                 result.resolution = "primary" if index == 0 else "deterministic_fallback"
                 result.healed = index > 0
                 self._note_side_effect(locator, step, state)
+                snap(page, step.id, "before", locator)
                 if isinstance(step, ClickStep):
                     locator.click()
                 elif isinstance(step, FillStep):

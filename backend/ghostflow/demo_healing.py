@@ -15,15 +15,23 @@ written to a demo evidence bundle (ghostflow/evidence.py) that the Demo Console 
 while the runner works. The portal is served on one fixed origin
 (default http://localhost:8080, the recording's origin), switching only the files behind it.
 Meta is used only with an explicit `--provider meta`, with retries off and a hard cap of one request.
+
+GF-006: each scenario also stores real screenshots of the Chromium page (execution/capture.py)
+in `<evidence dir>/captures/<bundle name>/`, which the console shows next to the steps. Only the
+local synthetic portal is captured, sensitive steps never are, and `--no-captures` turns it off.
 """
 
 import argparse
 import json
 import logging
+import os
+import re
 import shutil
 import sys
 import tempfile
 import threading
+import uuid
+from contextlib import nullcontext
 from datetime import UTC, datetime
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -33,6 +41,15 @@ PORTAL_DIR = REPO_ROOT / "demo-portal"
 VARIANTS_DIR = PORTAL_DIR / "variants"
 RECORDING_FILE = REPO_ROOT / "docs" / "examples" / "demo-recording.json"
 DEFAULT_VARIANT = "crear-requerimiento"
+CAPTURE_RUNS_KEPT = 5  # retention: capture folders of the most recent runs only
+
+
+def captures_allowed(evidence_dir: Path, repo_root: Path = REPO_ROOT) -> bool:
+    """Captures go to the git-ignored demo-evidence/ or outside the repository, never to a
+    versioned path such as docs/evidence."""
+    where = Path(evidence_dir).resolve()
+    root = repo_root.resolve()
+    return not where.is_relative_to(root) or where.is_relative_to(root / "demo-evidence")
 
 
 def build_variant(variant: str, dest: Path, portal_dir: Path = PORTAL_DIR) -> Path:
@@ -152,7 +169,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--confirm-meta", action="store_true", help="Confirm the single real Meta request without a prompt")
     parser.add_argument("--variant", default=DEFAULT_VARIANT)
     parser.add_argument("--port", type=int, default=8080, help="Port of http://localhost:<port> (must match the recording)")
-    parser.add_argument("--headed", action="store_true", help="Show the browser")
+    parser.add_argument("--headed", action="store_true", help="Also show the Chromium window (diagnosis)")
     parser.add_argument("--delay-ms", type=int, default=settings.step_delay_ms, help="Pause between steps (for filming)")
     parser.add_argument("--hold-ms", type=int, default=settings.final_hold_ms, help="Keep the final page visible this long")
     parser.add_argument("--step-timeout-ms", type=int, default=4000)
@@ -162,6 +179,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--evidence-dir", type=Path, default=Path(settings.demo_evidence_dir), help="Where bundles go")
     parser.add_argument("--name", help="Bundle file name (default: <UTC time>-<provider>)")
     parser.add_argument("--out", type=Path, help="Also write the GF-003 style summary JSON here")
+    parser.add_argument("--no-captures", action="store_true", help="Do not store browser screenshots")
     args = parser.parse_args(argv)
     if not (0 <= args.delay_ms <= 5000 and 0 <= args.hold_ms <= 30000):
         parser.error("--delay-ms must be 0..5000 and --hold-ms 0..30000")
@@ -175,6 +193,7 @@ def main(argv: list[str] | None = None) -> int:
     from ghostflow.evidence import AiSource, AiUsage, EvidenceBundle, apply_event, finish_scenario, new_scenario
     from ghostflow.evidence import outline_workflow, scenario_title, write_bundle
     from ghostflow.execution import resolve_inputs
+    from ghostflow.execution.capture import CaptureBudget, CapturePolicy, CaptureRecorder, prune_captures
     from ghostflow.execution.playwright_web import PlaywrightWebAdapter
     from ghostflow.execution.recovery import Healer, RecoveryPolicy
     from ghostflow.security import UrlPolicy
@@ -243,8 +262,17 @@ def main(argv: list[str] | None = None) -> int:
 
     wanted = set(args.only or ["A", "B", "C"])
     started = datetime.now(UTC)
-    name = args.name or f"{started:%Y%m%d-%H%M%S}-{args.provider}"
+    name = args.name or f"{started:%Y%m%d-%H%M%S}-{args.provider}-{uuid.uuid4().hex[:8]}"
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,99}", name):
+        parser.error("--name must be a plain bundle name (1..100 safe characters)")
     bundle_path = args.evidence_dir / f"{name}.json"
+    args.evidence_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        fd = os.open(bundle_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+    except FileExistsError:
+        parser.error("Bundle name already exists; use a new --name")
+    else:
+        os.close(fd)  # reserve the name across processes before any writer can replace it
     is_meta = isinstance(provider, MetaModelProvider)
     bundle = EvidenceBundle(
         title=f"A/B/C self-healing demo · {'Meta Muse Spark' if is_meta else 'offline mock'}",
@@ -274,10 +302,27 @@ def main(argv: list[str] | None = None) -> int:
                 bundle.ai.usage = AiUsage(**{k: totals.get(k, 0) for k in AiUsage.model_fields})
             write_bundle(bundle_path, bundle)
 
+    capture_dir = args.evidence_dir / "captures" / name
+    capturing = not args.no_captures and captures_allowed(args.evidence_dir)
+    if not args.no_captures and not capturing:
+        print(f"Browser captures off: {args.evidence_dir} is a versioned path (use demo-evidence/).", file=sys.stderr)
+    capture_policy = CapturePolicy()
+    capture_budget = CaptureBudget(capture_policy.max_bytes_per_run)
+    if capturing:
+        prune_captures(args.evidence_dir / "captures", CAPTURE_RUNS_KEPT - 1)
     save()
     print(f"Demo Console: http://127.0.0.1:8010/console/  (bundle {bundle_path})", file=sys.stderr)
+    print(
+        "Browser: Chromium window shown (diagnosis)" if args.headed
+        else f"Browser: headless; follow the run in the Demo Console{' (real captures)' if capturing else ''}",
+        file=sys.stderr,
+    )
     summaries = []
-    with tempfile.TemporaryDirectory(prefix="ghostflow-variant-") as tmp:
+    from ghostflow.execution.capture import capture_session
+
+    session = capture_session(args.evidence_dir / "captures", name) if capturing else nullcontext(False)
+    with session as capture_ready, tempfile.TemporaryDirectory(prefix="ghostflow-variant-") as tmp:
+        capturing = capturing and capture_ready
         variant_dir = build_variant(args.variant, Path(tmp) / "portal")
         try:
             server = SwitchableStaticServer(PORTAL_DIR, port=args.port)
@@ -298,7 +343,10 @@ def main(argv: list[str] | None = None) -> int:
                         apply_event(scenario, event, payload)
                     save()
 
-                result = adapter(healing).execute(workflow, values, observer=observe)
+                recorder = (
+                    CaptureRecorder(capture_dir, key, workflow, capture_policy, capture_budget) if capturing else None
+                )
+                result = adapter(healing).execute(workflow, values, observer=observe, capture=recorder)
                 finish_scenario(scenario, result)
                 save()
                 summaries.append(_summary(title, result))
@@ -309,6 +357,9 @@ def main(argv: list[str] | None = None) -> int:
             save()
             if is_meta:
                 provider.close()
+
+    if capturing:
+        prune_captures(args.evidence_dir / "captures", CAPTURE_RUNS_KEPT)
 
     if args.out:
         legacy = {

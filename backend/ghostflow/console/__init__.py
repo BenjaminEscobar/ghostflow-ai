@@ -1,14 +1,15 @@
 """Demo Console (GF-004): a static page at /console plus read-only JSON views for it.
 
 The console never starts, changes or deletes anything. It shows demo evidence bundles
-(ghostflow/evidence.py) and the stored runs of backend workflows; every response is
-sanitised again on the way out and served with a restrictive Content-Security-Policy.
+(ghostflow/evidence.py), the stored runs of backend workflows and the browser captures a demo
+run listed (GF-006); every response is sanitised again on the way out and served with a
+restrictive Content-Security-Policy.
 """
 
 from pathlib import Path
 
 from fastapi import APIRouter, FastAPI, HTTPException, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import ValidationError
 from sqlalchemy import select
@@ -88,6 +89,22 @@ def get_source(collection: str, name: str, request: Request) -> dict:
     return {"collection": collection, "name": name, "bundle": bundle.model_dump(mode="json"), **present(bundle, collection)}
 
 
+@router.get("/captures/{name}/{capture_id}")
+def get_capture(name: str, capture_id: str, request: Request) -> Response:
+    """A browser capture of a demo run (GF-006). Read-only, only files the run's bundle lists."""
+    # Local single-user console: reject foreign browser embeds/fetches. This is not tenant auth.
+    if request.headers.get("sec-fetch-site") == "cross-site":
+        raise HTTPException(403, "Cross-site capture access denied")
+    origin = request.headers.get("origin")
+    if origin and origin != str(request.base_url).rstrip("/"):
+        raise HTTPException(403, "Cross-origin capture access denied")
+    try:
+        data = _store(request).capture_file(name, capture_id)
+    except (EvidenceNotFound, ValidationError, ValueError, OSError):
+        raise HTTPException(404, "Capture not found") from None
+    return Response(data, media_type="image/jpeg")
+
+
 def mount_console(app: FastAPI, settings) -> None:
     app.state.evidence_store = EvidenceStore(Path(settings.demo_recorded_dir), Path(settings.demo_evidence_dir))
     app.include_router(router)
@@ -100,10 +117,16 @@ def mount_console(app: FastAPI, settings) -> None:
 
     @app.middleware("http")
     async def console_headers(request: Request, call_next):
-        response = await call_next(request)
+        # The console is explicitly a loopback tool, never a multi-tenant/public image service.
+        # Checking Host also blocks a foreign domain rebound to loopback from reading demo data.
+        if request.url.path.startswith("/api/demo") and request.url.hostname not in {"localhost", "127.0.0.1", "::1"}:
+            response = JSONResponse({"detail": "Demo evidence requires a loopback host"}, status_code=403)
+        else:
+            response = await call_next(request)
         if request.url.path.startswith(("/console", "/api/demo")):
             response.headers["Content-Security-Policy"] = CONSOLE_CSP
             response.headers["X-Content-Type-Options"] = "nosniff"
             response.headers["Referrer-Policy"] = "no-referrer"
-            response.headers["Cache-Control"] = "no-store"
+            response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
+            response.headers["Cache-Control"] = "no-store"  # retention applies to disk and browser caches
         return response

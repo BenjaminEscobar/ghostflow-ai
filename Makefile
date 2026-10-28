@@ -56,17 +56,20 @@ DEMO_WORKFLOW ?= ../docs/examples/workflow-meta-interpreted.json
 DEMO_INPUTS = --input usuario=demo --input contrasena=ghostflow-demo \
 	--input "nombre_del_cliente=Lucía Méndez" --input correo_del_cliente=lucia.mendez@ejemplo.test \
 	--input categoria=soporte --input "descripcion=Actualizar el contacto de facturación"
-DEMO_RUN = cd backend && .venv/bin/python -m ghostflow.demo_healing --headed \
+# Integrated by default: Chromium runs headless and the Demo Console shows its real captures.
+# DEMO_HEADED=1 also opens the Chromium window (diagnosis; macOS brings it to the front per scenario).
+DEMO_HEADED ?= 0
+DEMO_RUN = cd backend && .venv/bin/python -m ghostflow.demo_healing $(if $(filter 1,$(DEMO_HEADED)),--headed) \
 	--delay-ms $(DEMO_DELAY_MS) --hold-ms $(DEMO_HOLD_MS) --workflow-file $(DEMO_WORKFLOW) $(DEMO_INPUTS)
 
 console:  ## Backend + Demo Console on http://127.0.0.1:8010/console/ (read-only views)
 	@echo "Demo Console: http://127.0.0.1:8010/console/"
 	cd backend && .venv/bin/uvicorn ghostflow.main:app --host 127.0.0.1 --port 8010
 
-demo-rehearsal:  ## A/B/C in a visible browser, offline mock for C (SIMULATED, 0 Meta requests). Port 8080 free
+demo-rehearsal:  ## A/B/C shown in the Demo Console (headless Chromium), offline mock for C (SIMULATED, 0 Meta requests). Port 8080 free
 	$(DEMO_RUN) --provider mock
 
-demo-live:  ## A/B/C in a visible browser; C asks the REAL Meta API: max 1 request, after typing 'meta'
+demo-live:  ## A/B/C shown in the Demo Console; C asks the REAL Meta API: max 1 request, after typing 'meta'
 	$(DEMO_RUN) --provider meta
 
 demo-evidence:  ## Rebuild docs/evidence/gf003-meta-recovery.json from the local GF-003 Meta evidence (no AI call)
