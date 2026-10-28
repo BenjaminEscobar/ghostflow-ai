@@ -26,9 +26,12 @@ Mejoras identificadas durante GF-001 y dejadas fuera de alcance a propósito.
 - Panel de auditoría de recuperaciones por workflow (consola Angular).
 
 ## Demo Console (GF-004)
+- Recomendaciones UX priorizadas de la revisión GF-006: [informe independiente](GF006_INDEPENDENT_REVIEW.md). Priorizar ampliación del navegador y etiquetas separadas de interpretación/recuperación para el hackathon; las demás mejoras requieren revisión visual humana.
+- Navegador continuo: [comparación y propuesta GF-006](GF006_LIVE_BROWSER_RESEARCH.md). Sin implementación ni endpoints nuevos en esta misión; considerar `page.screencast` nativo además de CDP.
 - Eventos en vivo por Server-Sent Events en lugar de *polling* de archivos.
 - Lanzar ejecuciones desde la consola (requiere autenticación y confirmación explícita; hoy es solo lectura a propósito).
-- Captura de pantalla redactada por paso y vista lado a lado navegador/consola.
+- Evento real de evaluación de candidatos desde el healer (hoy *Evaluating* solo existe en el playback).
+- Resaltar en la captura el elemento elegido por la recuperación. Hoy el healer actúa sin pasar por el adaptador, así que el paso recuperado tiene la imagen `not_found` y no `before`. Requiere un hook en `Healer.attempt`, que GF-006 no modificó.
 - Exportar una evidencia como informe PDF o Markdown firmado (hash del bundle).
 - Comparar dos ejecuciones (p. ej. A y C) paso a paso.
 - Selector de idioma ES/EN en la consola.
@@ -37,11 +40,14 @@ Mejoras identificadas durante GF-001 y dejadas fuera de alcance a propósito.
 ## Captura y ejecución
 - Navegación SPA (`history.pushState`, `hashchange`).
 - iframes del mismo origen, shadow DOM, carga de archivos, teclas adicionales, doble clic, hover.
-- Capturas de pantalla / traza de Playwright por ejecución (con redacción).
+- Traza de Playwright por ejecución (con redacción) y capturas en workflows del backend (`POST /runs`), con la misma política de GF-006.
 - Cola de ejecuciones asíncrona (Redis) y reintentos.
 - Persistir la estrategia "curada" tras una ejecución con `healed` para promoverla a primaria (con aprobación humana).
 
 ## Plataforma
+- Aislamiento de red completo para páginas no confiables: auditar WebRTC, WebTransport, workers y redirecciones además del filtro HTTP/WS; la allowlist del navegador no reemplaza un firewall de salida.
+- Retirar el puente async de cierre de WebSocket al actualizar Playwright, después de verificar que el callback síncrono ya no se bloquea (versión fijada: 1.63).
+- Paginación/caché del índice de evidencias y límites HTTP si el volumen deja de ser el de una demo local; la retención actual elimina imágenes, no bundles JSON históricos.
 - Autenticación de la API y de la extensión (token por instalación).
 - Migraciones con Alembic.
 - CI (GitHub Actions) ejecutando `make test` y `make test-e2e`.

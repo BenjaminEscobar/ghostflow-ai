@@ -160,11 +160,11 @@ Con la extensión y la API: graba y compila contra `make portal`; luego detén e
 
 ## Demo Console (GF-004)
 
-Página web de solo lectura en `http://127.0.0.1:8010/console/` (`make console`), con dos vistas. La **vista Demo**, minimalista y pensada para presentar, incluye: Learn / Understand / Recover, escenarios A/B/C, el flujo de ejecución, un navegador reconstruido a partir de la evidencia (no es una captura), un resumen de self-healing y la mascota de GhostFlow, que reacciona al estado. La **vista Developer** (`?view=developer`) conserva toda la auditoría. En conjunto, la consola muestra el workflow, la ejecución paso a paso (Pending / Running / Completed / Failed / Recovered), la interpretación de Muse Spark, el panel de self-healing (elemento original → elemento nuevo, localizadores agotados, candidatos, justificación, confianza y validaciones) y la evidencia verificable (resultado, verificaciones, proveedor, latencia, tokens y SHA-256 del DSL antes y después).
+Página web de solo lectura en `http://127.0.0.1:8010/console/` (`make console`), con dos vistas. La **vista Demo**, minimalista y pensada para presentar, incluye: Learn / Understand / Recover, escenarios A/B/C, el flujo de ejecución, un navegador reconstruido a partir de la evidencia (no es una captura), un resumen de self-healing y la mascota de GhostFlow, que reacciona al estado. La **vista Developer** (`?view=developer`) conserva toda la auditoría. Desde GF-006, las ejecuciones del runner guardan **capturas reales** del Chromium que controla GhostFlow (solo el portal local, nunca el paso de la contraseña) y la consola las muestra en el centro con su procedencia: *Live capture*, *Recorded capture* o *Reconstructed view*. La mascota reacciona a eventos reales (*Investigating*, *Recovered*, *Stopped safely*). En conjunto, la consola muestra el workflow, la ejecución paso a paso (Pending / Running / Completed / Failed / Recovered), la interpretación de Muse Spark, el panel de self-healing (elemento original → elemento nuevo, localizadores agotados, candidatos, justificación, confianza y validaciones) y la evidencia verificable (resultado, verificaciones, proveedor, latencia, tokens y SHA-256 del DSL antes y después).
 
 ```bash
 make console          # terminal 1: API + consola
-make demo-rehearsal   # terminal 2: A/B/C en navegador visible, mock (SIMULADO, 0 solicitudes a Meta)
+make demo-rehearsal   # terminal 2: A/B/C en la consola (Chromium sin ventana), mock (SIMULADO, 0 solicitudes a Meta); DEMO_HEADED=1 muestra la ventana
 make demo-live        # A/B/C con Meta real en C: máx. 1 solicitud, pide escribir "meta" para confirmar
 ```
 
@@ -199,6 +199,7 @@ El backend comparte el espacio de red del contenedor del portal, de modo que `ht
 | GET | `/api/workflows/{id}/runs`, `/api/runs/{id}` | Historial de ejecuciones |
 | GET | `/api/demo/sources` | Evidencias de demo y workflows disponibles para la consola (solo lectura) |
 | GET | `/api/demo/sources/{recorded\|runs\|workflows}/{nombre}` | Una evidencia normalizada y sus etiquetas (en vivo, guardada, real o simulada) |
+| GET | `/api/demo/captures/{bundle}/{id}` | Captura JPEG listada en una ejecución de demo (solo lectura, GF-006) |
 | GET | `/console/` | Demo Console (estática) |
 
 ## Configuración

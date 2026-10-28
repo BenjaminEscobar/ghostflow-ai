@@ -32,7 +32,7 @@ Setup and commands: [`DEMO_RUNBOOK.md`](DEMO_RUNBOOK.md).
 
 > **VO (EN):** Now GhostFlow runs it by itself, with new data — a different customer, a different category. Playwright replays every step, and GhostFlow verifies the result: the confirmation message and the final page. Scenario A: passed.
 
-*Notas (ES):* `make demo-rehearsal` o `make demo-live`, con el navegador visible (pausa de 800 ms) y la consola en *Live*. Muestra *Input data for this run* (Lucía Méndez) y *Verifications 2/2*.
+*Notas (ES):* `make demo-rehearsal` o `make demo-live`, con Chromium sin ventana (pausa de 800 ms) y la consola en *Live* mostrando sus capturas reales (*Live capture*). Muestra *Input data for this run* (Lucía Méndez) y *Verifications 2/2*.
 
 ### 2:00–2:40 · Self-Healing
 
@@ -65,7 +65,7 @@ Setup and commands: [`DEMO_RUNBOOK.md`](DEMO_RUNBOOK.md).
 | 3 | 0:30 | Portal form | Typing customer, category, description; password field typed (not recorded) | Live |
 | 4 | 0:50 | Popup | *Grabación enviada: <id>* | Extension |
 | 5 | 1:00 | Console · Meta Intelligence | Badge **Real**, purpose, critical steps, review notes, `meta · muse-spark-1.3` | `make console` |
-| 6 | 1:30 | Chromium (headed) + console *Live* | Steps advancing; timeline Pending → Running → Completed; inputs with new data | `make demo-rehearsal` / `demo-live` |
+| 6 | 1:30 | Console *Live* with real captures (headless Chromium) | Steps advancing; timeline Pending → Running → Completed; inputs with new data | `make demo-rehearsal` / `demo-live` |
 | 7 | 1:55 | Console · scenario A | *Completed*, Verifications 2/2 | Console |
 | 8 | 2:00 | Portal variant dashboard | Toolbar *Crear requerimiento* (no "Nueva solicitud") | Runner, scenario B |
 | 9 | 2:08 | Console · scenario B | **Failed at s6**, 4 struck-out locators, *Not attempted* | Console |

@@ -1,4 +1,4 @@
-# Arquitectura — GF-001 / GF-002 / GF-003 / GF-004
+# Arquitectura — GF-001 / GF-002 / GF-003 / GF-004 / GF-005 / GF-006
 
 ## Principios
 
@@ -144,3 +144,74 @@ PlaywrightWebAdapter._run_step
 - **Frontend sin build:** HTML, CSS y JS sin dependencias, servidos por FastAPI. El DOM se construye con `textContent`; la CSP es `default-src 'none'`, solo `'self'` para scripts, estilos y `connect`, y no hay recursos externos.
 - **Auditoría ampliada:** `RecoveryAttempt.candidates` guarda el resumen público de los candidatos que vio el modelo (id, tipo, rol, nombre saneado y ruta), sin URLs completas ni valores. Es el único cambio en el modelo de GF-003 y es aditivo: las reglas de recuperación no cambiaron.
 - **Vistas (GF-005):** la vista Demo y la vista Developer comparten los mismos datos y el mismo `render()`; solo cambia qué se muestra. El navegador de la vista Demo se reconstruye con `StepView.location` (dirección derivada de los pasos `navigate` y `wait_for_url`) y con la acción del paso; no es una captura. La mascota es un SVG en línea con estados de ánimo controlados por CSS (`data-mood`). No hay dependencias nuevas ni fuentes externas, y el tema es claro, con azul `#1877F2` y contraste AA verificado en las pruebas.
+
+## Navegador integrado y Ghost 2.0 (GF-006)
+
+```
+ PlaywrightWebAdapter.execute(observer=…, capture=CaptureRecorder)
+   snap() en 4 puntos ──► CaptureRecorder.take(page, step_id, phase, target)
+        │                    ├─ privacidad ANTES de la imagen (paso sensible, página contaminada, origen)
+        │                    ├─ page.screenshot(viewport, JPEG, mask=[password, cc-*])
+        │                    └─ demo-evidence/captures/<bundle>/<id>.jpg   (ignorado por Git)
+        ▼
+ notify("capture", metadatos) ──► apply_event ──► ScenarioView.captures (≤ 80)
+                                                     │
+ consola (polling 900 ms del bundle) ◄───────────────┘
+   <img src="/api/demo/captures/<bundle>/<id>">  ◄── GET de solo lectura: solo ids listados y no omitidos
+```
+
+- **Capturas por evento, sin streaming ni iframe.** Son imágenes JPEG del viewport de la página de Chromium que controla GhostFlow (`page.screenshot`), nunca de otras pestañas, ventanas ni del sistema operativo. No hay sesión remota: la consola no puede controlar ni inspeccionar el navegador.
+- **Puntos de captura** (`phase`):
+  - `after`: tras `navigate` / `wait_for_url` (página cargada);
+  - `before`: tras resolver el elemento y justo antes de actuar, con la caja normalizada (0..1) del elemento usado;
+  - `not_found`: cuando todos los localizadores grabados fallaron, antes de `recovery_started`. El healer ejecuta su candidato validado sin pasar por el adaptador, así que un paso recuperado no tiene imagen `before`, y no se fabrica;
+  - `final`: después de las verificaciones (`step_id = null`).
+- **Observación desacoplada:** la captura no desplaza la página, no cambia acciones ni reintentos, y conserva el caret. Solo lee la caja visible; un elemento fuera del viewport no recibe un recuadro inventado. Sus errores se registran sin volcar excepciones del navegador y se ignoran. No se añadieron esperas: el procesamiento de capturas sí consume tiempo real y forma parte de las duraciones medidas. La revisión también cerró una evasión de la allowlist por WebSocket, independientemente de que se activen capturas; no cambió el DSL, el modelo ni las reglas del healer.
+- **Contrato del evento `capture`** (`CaptureRef`, `extra="forbid"`): `id` (`^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$`), `step_id`, `phase` (`before|after|not_found|final`), `taken_at`, `page` (origen + ruta, sin query ni fragmento), `width`, `height`, `bytes`, `box {x,y,w,h}`, `masked` y `skipped` (`sensitive_step|sensitive_page|off_origin|limit|rate|too_large|error`). Una captura omitida también se registra, para que la consola pueda explicar por qué no hay imagen.
+- **Privacidad (antes de que exista la imagen):**
+  - Un paso `fill` o `select` que usa una entrada `sensitive` (la contraseña, `s3`) nunca se captura.
+  - Tampoco se captura nada más en ese documento hasta un `domcontentloaded` auténtico del navegador. Un `wait_for_url` ya satisfecho o un cambio SPA no limpia la protección.
+  - Solo se capturan orígenes loopback (`localhost`, `127.0.0.1`, `::1`) que además estén en `allowed_origins` del workflow. El resto, incluidos IPs privadas, metadatos de nube, `file:`, `about:` y `chrome:`, se omite como `off_origin`.
+  - Playwright enmascara campos de contraseña, pago, OTP, nombres/ids/ARIA sensibles, regiones `data-private` y los iframes completos durante el propio `screenshot`. La ayuda de credenciales ficticias del portal lleva `data-private`. No se editan imágenes después. Esto protege el portal sintético controlado; no implica detectar cualquier secreto arbitrario en texto, canvas, shadow DOM cerrado o páginas autenticadas ajenas.
+- **Recursos:**
+  - 40 capturas por escenario y 25 MB por ejecución (presupuesto compartido entre A, B y C);
+  - 600 KB por imagen, como máximo 10 intentos de captura por segundo y escenario (también cuentan los fallidos), viewport de hasta 1440×900 píxeles CSS en JPEG con calidad 70;
+  - presupuesto de bytes compartido y atómico; retención de las 5 carpetas más recientes, respetando locks de ejecuciones activas y sin seguir symlinks;
+  - el endpoint rechaza archivos de más de 1 MB y dimensiones JPEG reales superiores a 1440×900;
+  - caché DOM limitada a 3 imágenes grandes y 80 miniaturas, vaciada al cambiar de evidencia; las imágenes eliminadas por retención llevan a la reconstrucción.
+- **Ubicación:** el runner (`demo_healing`) solo captura si `--evidence-dir` está fuera del repositorio o dentro de `demo-evidence/`, que está ignorado por Git. Nunca escribe en `docs/evidence`. `--no-captures` las desactiva.
+- **Endpoint** `GET /api/demo/captures/{bundle}/{capture_id}`:
+  - solo cubre la colección `runs`; las evidencias grabadas no tienen capturas;
+  - el id debe figurar en ese bundle sin `skipped`. Cada componente se abre mediante descriptores con `O_NOFOLLOW`, incluso `captures/` y el directorio del bundle; se rechazan hardlinks y archivos especiales;
+  - devuelve bytes ya leídos del descriptor validado, sin reabrir una ruta en `FileResponse`. Se limita tanto `fstat` como la lectura;
+  - devuelve `image/jpeg`, `nosniff`, CSP, `Cross-Origin-Resource-Policy: same-origin` y `Cache-Control: no-store`. Rechaza peticiones de imagen cross-site/cross-origin. `/api/demo` requiere un Host loopback literal, mitigando DNS rebinding sobre estos endpoints;
+  - no hay POST ni DELETE ni autenticación multiusuario. Solo es una consola local en una máquina de confianza; no exponer el backend;
+  - nombres de ejecución aleatorios por defecto, nombres CLI validados y reserva exclusiva para impedir colisiones/sobrescrituras.
+- **Procedencia en la consola:**
+  - **Live capture:** ejecución en curso.
+  - **Recorded capture:** imagen guardada durante esa ejecución.
+  - **Reconstructed view:** sin capturas, por ejemplo la evidencia GF-003, que no tiene imágenes y no se le inventan.
+  - Las etiquetas *Simulated AI* / *Real Meta* se mantienen.
+  - Un *Replay* de capturas grabadas lleva la franja *REPLAY … not a live execution*.
+  - Para cada paso se muestra la última captura tomada en ese paso o antes, nunca una posterior, con un recuadro sobre el elemento usado. Si el paso no tiene captura propia, la nota indica de qué paso viene la imagen y por qué falta la suya.
+- **Ensayo integrado:** `make demo-rehearsal` y `make demo-live` ejecutan Chromium sin ventana (headless) por defecto, y `DEMO_HEADED=1` lo muestra para diagnosticar. Antes, cada escenario lanzaba un Chromium con ventana, y macOS lo traía al primer plano por encima de la consola.
+- **Continuidad en vivo:**
+  - mientras hay una ejecución en vivo, la consola consulta cada 500 ms;
+  - el visor mantiene la última imagen ya cargada hasta que llega la siguiente, así que no hay cuadros en blanco;
+  - cuando una consulta revela un evento que terminó entre dos consultas, incluso si la respuesta final ya dice `saved`, la consola lo presenta durante `MOMENT_MS` (1,6 s), en orden y en pasado. Admite hasta 4 eventos en espera más el evento visible. El runner nunca se frena; elegir escenario, evidencia, paso o miniatura cancela las pausas;
+  - cambiar de fuente aborta la petición anterior y descarta respuestas de generaciones previas, también A→B→A. La elección manual desactiva Follow live runs; abrir una URL inicial conserva la preferencia del checkbox. Se conserva el foco del teclado durante el polling.
+  - si un asesor tarda más de la ventana de actividad, la consola muestra la pérdida de actualizaciones sin afirmar que el motor sigue trabajando. El polling de fuentes vuelve a consultar ese mismo run cuando reanuda o termina; el historial seleccionado del backend también se refresca. Un fallo final de verificación tiene prioridad sobre una celebración retrospectiva.
+  - No hay flujo de video: cada paso ya produce capturas reales.
+- **Ghost 2.0 (estados derivados de eventos reales):**
+
+  | Estado | Evento que lo activa |
+  |---|---|
+  | `working` | `step_started` |
+  | `investigating` | `recovery_started`; el texto es *Recovery in progress*, sin afirmar qué hace el modelo |
+  | `evaluating` | **solo en playback**, a partir de las validaciones grabadas y con la etiqueta *playback pace, not the real duration*; el backend no emite un evento de evaluación en vivo |
+  | `proud` | `step.state == recovered`: un salto, saludo y destellos, sin repetirse; un fallo de verificación posterior tiene prioridad |
+  | `happy` | completado |
+  | `alert` | detenido de forma segura cuando consta en la evidencia; errores, interrupciones y verificación fallida se rotulan «review required» |
+  | `cautious` | `recovery.outcome` es `rejected` o `error`; nunca celebra |
+
+  Los estados se anuncian una sola vez en `#agent-status` (`role="status"`), siempre van acompañados de texto y se detienen con `prefers-reduced-motion`.

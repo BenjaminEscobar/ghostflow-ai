@@ -20,7 +20,7 @@ No hace falta Docker, PostgreSQL, Redis ni ningún servicio externo: la demo usa
 git clone https://github.com/BenjaminEscobar/ghostflow-ai.git
 cd ghostflow-ai
 make setup           # venv, dependencias, Chromium de Playwright
-make test            # 231 pruebas offline (sin navegador, sin red)
+make test            # 255 pruebas offline (sin navegador, sin red)
 make test-e2e        # 16 pruebas con Chromium real (extensión, replay, self-healing, consola)
 ```
 
@@ -86,7 +86,7 @@ Para cambiarlos no hace falta editar código: `make demo-rehearsal DEMO_DELAY_MS
 1. `make console` y abre `http://127.0.0.1:8010/console/` en Chrome (ventana a 1920×1080 si vas a grabar).
 2. Deja marcado **Follow live runs**: la consola cambia sola a la ejecución nueva en cuanto aparece.
 3. En otra terminal: `make demo-rehearsal` (o `make demo-live`).
-4. Chromium se abre y ejecuta **A** (portal original), **B** (portal rediseñado, self-healing apagado: falla en `s6`) y **C** (portal rediseñado, self-healing encendido: recupera `s6` y termina). La consola sigue cada paso: Pending → Running → Completed / Failed / Recovered.
+4. Chromium se ejecuta **sin ventana** (headless): lo único visible es la consola, que muestra sus capturas reales. Ejecuta **A** (portal original), **B** (portal rediseñado, self-healing apagado: falla en `s6`) y **C** (portal rediseñado, self-healing encendido: recupera `s6` y termina). La consola sigue cada paso: Pending → Running → Completed / Failed / Recovered. Para diagnosticar con la ventana de Chromium: `make demo-rehearsal DEMO_HEADED=1`. En macOS, cada escenario abre una ventana nueva que pasa al primer plano.
 5. Al terminar, la evidencia queda en `demo-evidence/<fecha>-<proveedor>.json` (ignorada por Git) y aparece en el selector como *Saved run*.
 
 El workflow por defecto es `docs/examples/workflow-meta-interpreted.json`: el workflow grabado el 2026-10-27 con interpretación **real** de Muse Spark (GF-002). Se exportó sin los valores personales de la grabación y sin parámetros `utm_*`. El runner lo ejecuta con datos nuevos y ficticios (`Lucía Méndez`, `lucia.mendez@ejemplo.test`, categoría `soporte`), definidos en `DEMO_INPUTS` del Makefile.
@@ -126,9 +126,11 @@ Por API (solo lectura): `GET /api/demo/sources`, `GET /api/demo/sources/{recorde
 
 ## 9. Pruebas
 
+La revisión independiente y sus resultados finales están en [GF006_INDEPENDENT_REVIEW.md](GF006_INDEPENDENT_REVIEW.md). Las cifras iniciales de GF-006 que siguen son la baseline previa a esa revisión.
+
 ```bash
-make test        # 231 offline: incluye 33 de la consola (sanitización, real vs simulado, evidencias, API, CSP, contraste AA, accesibilidad)
-make test-e2e    # 16 con Chromium: incluye 6 de la consola (modo visual, observador, en vivo y grabada, vistas Demo/Developer a 1440, 1024 y 820 px)
+make test        # 255 offline: incluye 33 de la consola y 24 de capturas GF-006 (privacidad, límites, endpoint, estados de la mascota, cambio de evidencia, ensayo integrado)
+make test-e2e    # 19 con Chromium: incluye 6 de la consola y 3 de capturas reales GF-006 (pasos, paso sensible, Recorded capture vs Reconstructed view, ensayo integrado A/B/C)
 git diff --check
 ```
 
@@ -150,8 +152,29 @@ Las pruebas ignoran `backend/.env` y bloquean toda red externa. Solo se permiten
 5. Pulsa **Replay evidence**: aparece la franja violeta *REPLAY of saved evidence · not a live execution*.
 6. Cambia a **Developer** (o abre `…/console/?view=developer#recorded%2Fgf003-meta-recovery`). Están las auditorías completas: localizadores agotados, candidatos, las 10 validaciones, tokens, latencia, proveedor y modelo, SHA-256 completo y procedencia. **Raw JSON** abre la evidencia tal como la sirve el backend.
 7. Ancho adaptable: con las DevTools (`⌥⌘I` → *Toggle device toolbar*) prueba 1440, 1024 y 820 px. No debe aparecer scroll horizontal ni texto comprimido en columnas estrechas (la E2E `test_demo_and_developer_views_are_usable_on_desktop_and_tablet` lo comprueba en esos tres anchos).
-8. Accesibilidad: en *Configuración del Sistema → Accesibilidad → Pantalla → Reducir movimiento* las animaciones se detienen. Con VoiceOver (`⌘F5`), la mascota se anuncia con su estado (p. ej. *GhostFlow mascot: recovered and completed*).
-9. Con una ejecución nueva (`make demo-rehearsal`), la consola cambia sola a *Live*, el pie del navegador dice *Live from the demo runner* y la insignia amarilla *Simulated AI* sigue visible.
+8. Accesibilidad: en *Configuración del Sistema → Accesibilidad → Pantalla → Reducir movimiento* las animaciones se detienen. Con VoiceOver (`⌘F5`), la mascota se anuncia con su estado (p. ej. *GhostFlow mascot: recovered safely*) y cada cambio de estado se anuncia una sola vez (*GhostFlow: Investigating… recovery in progress*).
+9. Con una ejecución nueva (`make demo-rehearsal`), la consola cambia sola a *Live* y muestra las capturas reales (*Live capture*); la insignia amarilla *Simulated AI* sigue visible. Ver la sección 10.1.
+
+### 10.1 Navegador integrado con capturas reales (GF-006)
+
+1. Terminal 1: `make console`. Abre `http://127.0.0.1:8010/console/` con **Follow live runs** marcado.
+2. Terminal 2: `make demo-rehearsal` (mock, 0 solicitudes a Meta). El runner guarda las capturas en `demo-evidence/captures/<fecha>-mock/` (ignorado por Git) y lo indica al arrancar. Usa `--no-captures` para desactivarlas.
+3. Mientras corre:
+   - el centro de la tarjeta muestra la captura real de Chromium con la etiqueta **Live capture**;
+   - el recuadro azul marca el elemento que se va a usar;
+   - debajo aparece una tira de miniaturas que se va llenando.
+   - En B, paso `s6`: la consola se detiene un momento en la captura del panel sin el elemento (*Recorded element not found here · stopped safely without acting*), con la mascota en *Stopped safely*.
+   - En C, paso `s6`: la captura muestra el panel sin el elemento grabado y la mascota pasa a **Recovery started** (o *Investigating… recovery in progress*, si la consola alcanza a ver la recuperación en curso). Luego aparece **Recovered safely** con *GhostFlow then chose "Crear requerimiento"*, y la captura siguiente (`s7`) es la página a la que llevó el elemento elegido.
+   - Con el mock, la recuperación dura milisegundos y ocurre entre dos consultas de la consola. Cuando una consulta revela un evento ya terminado (recuperación, detención segura o escenario completado), la consola se detiene unos 1,6 s en ese evento real, en orden y con el texto en pasado, y luego sigue a la ejecución, que nunca se frena. Si eliges un escenario o un paso, esa pausa se cancela.
+4. Al terminar, la misma ejecución aparece como *Saved run* con la etiqueta **Recorded capture**. Haz clic en el paso `s3` (contraseña): la imagen es la del paso anterior y la nota dice *a sensitive input is typed here, so it is never captured*. Comprueba que en la carpeta no hay archivos `*-s3-*` ni `*-s4-*`.
+5. **Reconstructed** (conmutador sobre el navegador) vuelve a la vista reconstruida de GF-005. En *Recorded evidence → GF-003* no hay capturas: la etiqueta es **Reconstructed view** y el conmutador no aparece.
+6. **Replay evidence** en C reproduce *investigating → evaluating (Playback · reviewing recorded checks) → recovered* a ritmo de presentación. La franja indica *playback pace, not the real duration*.
+7. Developer → *Verifiable evidence → Browser captures*: número de capturas, MB y omitidas por motivo.
+8. Pruebas en tu Mac:
+   ```bash
+   cd backend && .venv/bin/pytest -m e2e tests/test_e2e_captures.py -v
+   make test-all   # 255 offline + 19 E2E
+   ```
 
 ## 11. Procedimiento para grabar el video final
 
@@ -160,16 +183,19 @@ Las pruebas ignoran `backend/.env` y bloquean toda red externa. Solo se permiten
 3. Decide si el escenario C del video usa:
    - **la ejecución real ya guardada** (*Recorded evidence*, 0 solicitudes nuevas), presentándola como evidencia grabada, o
    - **una ejecución real nueva**: `make demo-live`, 1 solicitud. Requiere tu autorización explícita y la clave en `backend/.env`.
-4. Para la toma del navegador usa el runner con `--headed` (ya incluido). Graba la ventana de Chromium y la consola lado a lado, o alterna entre ellas siguiendo el shot list de [`DEMO_SCRIPT.md`](DEMO_SCRIPT.md).
+4. Graba solo la consola: `make demo-rehearsal` (o `demo-live`) ejecuta Chromium sin ventana y la consola muestra sus capturas reales. Si además quieres tomas de la ventana de Chromium, usa `DEMO_HEADED=1`. En macOS cada escenario abre una ventana nueva en primer plano, así que tendrás que alternar entre ellas.
 5. No muestres terminales con variables de entorno ni el contenido de `backend/.env`.
 6. Revisa el video: la etiqueta *Simulated* no debe aparecer en una toma narrada como Meta real, y viceversa.
 
 ## 12. Limitaciones conocidas
 
+- Seguridad y cambios posteriores a la implementación inicial: [revisión GF-006](GF006_INDEPENDENT_REVIEW.md). Las capturas se sirven sin caché persistente, se rechazan symlinks en todos sus componentes y la retención respeta ensayos activos. El API de demo admite únicamente Host `localhost`, `127.0.0.1` o `[::1]`; no es un servicio autenticado para usuarios remotos.
+
 - La consola es de **solo lectura**: no inicia ejecuciones. Se lanzan con `make demo-*`, con la API o con Swagger.
-- La actualización en vivo usa *polling* (≈1 s) de un archivo JSON que escribe el runner. No hay WebSocket.
+- La actualización en vivo usa *polling* (≈1 s) de un archivo JSON que escribe el runner. No hay WebSocket. Las capturas se cargan una vez por id (caché del navegador y de la página).
+- Las capturas son imágenes del viewport, no una sesión interactiva ni video. Solo existen para ejecuciones nuevas del runner sobre el portal local; la evidencia GF-003 grabada no tiene imágenes. El estado *Evaluating* solo aparece en el playback de una evidencia guardada, porque el backend no emite un evento de evaluación en vivo.
 - La evidencia de GF-003 importada no guardaba la lista de candidatos ni los tiempos por paso. La consola lo indica, y los estados de los pasos previos al fallo se derivan de las reglas del ejecutor (`derived_steps`). Las ejecuciones nuevas sí guardan ambos.
 - El runner requiere el puerto 8080 libre (origen de la grabación).
-- La consola no muestra capturas de pantalla del navegador: el navegador de la vista Demo es una **reconstrucción** a partir de la evidencia (dirección y acción del paso) y lo indica. La toma visual real es la ventana de Chromium.
+- Sin capturas (evidencia GF-003, `--no-captures` o workflows del backend), el navegador de la vista Demo es una **reconstrucción** a partir de la evidencia y lo indica (*Reconstructed view*).
 - Probado en macOS con Chrome; no se probó en Windows ni Linux en esta fase.
 - Las reglas oficiales de presentación del hackathon no se pudieron confirmar desde fuentes oficiales (ver [`SUBMISSION_CHECKLIST.md`](SUBMISSION_CHECKLIST.md)).
